@@ -39,6 +39,23 @@ Homepage = "https://github.com/launchpadai/launchpadai"
 Documentation = "https://launchpadai.dev"
 Repository = "https://github.com/launchpadai/launchpadai"
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-xdist>=3.5.0",
+    "allpairspy>=2.5.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "unit: Unit tests for individual generators",
+    "integration: Full project generation tests",
+    "validation: Output file validation tests",
+    "slow: Tests that take > 10 seconds",
+]
+addopts = "-v --tb=short"
+
 [tool.setuptools.packages.find]
 include = ["launchpadai*"]
 
