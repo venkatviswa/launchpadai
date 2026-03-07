@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "launchpadai"
+version = "0.1.0"
+description = "CLI scaffolding tool for agentic AI applications — the Spring Initializr for AI engineering"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "LaunchpadAI Contributors"}
+]
+keywords = ["ai", "agents", "llm", "scaffolding", "cli", "rag", "langchain", "llamaindex"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+    "jinja2>=3.1.0",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+launchpad = "launchpadai.cli.main:app"
+
+[project.urls]
+Homepage = "https://github.com/launchpadai/launchpadai"
+Documentation = "https://launchpadai.dev"
+Repository = "https://github.com/launchpadai/launchpadai"
+
+[tool.setuptools.packages.find]
+include = ["launchpadai*"]
+
+[tool.setuptools.package-data]
+launchpadai = ["templates/**/*"]

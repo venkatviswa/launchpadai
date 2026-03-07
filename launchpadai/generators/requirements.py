@@ -1,0 +1,203 @@
+"""Generate requirements.txt based on project configuration."""
+from pathlib import Path
+
+
+# Base dependencies every project needs
+BASE_DEPS = [
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0",
+]
+
+LLM_DEPS = {
+    "openai": ["openai>=1.30.0"],
+    "anthropic": ["anthropic>=0.30.0"],
+    "google": ["google-generativeai>=0.7.0"],
+    "ollama": ["ollama>=0.2.0"],
+    "multiple": ["openai>=1.30.0", "anthropic>=0.30.0"],
+}
+
+FRAMEWORK_DEPS = {
+    "plain": [],
+    "langchain": [
+        "langchain>=0.2.0",
+        "langgraph>=0.1.0",
+        "langchain-core>=0.2.0",
+        "langchain-community>=0.2.0",
+    ],
+    "llamaindex": [
+        "llama-index>=0.10.0",
+    ],
+    "crewai": [
+        "crewai>=0.30.0",
+    ],
+    "haystack": [
+        "haystack-ai>=2.2.0",
+    ],
+}
+
+# Additional LangChain provider packages
+LANGCHAIN_LLM_DEPS = {
+    "openai": ["langchain-openai>=0.1.0"],
+    "anthropic": ["langchain-anthropic>=0.1.0"],
+    "google": ["langchain-google-genai>=1.0.0"],
+    "ollama": ["langchain-community>=0.2.0"],
+    "multiple": ["langchain-openai>=0.1.0", "langchain-anthropic>=0.1.0"],
+}
+
+EMBEDDING_DEPS = {
+    "openai-small": ["openai>=1.30.0"],
+    "openai-large": ["openai>=1.30.0"],
+    "cohere": ["cohere>=5.0.0"],
+    "bge-m3": ["sentence-transformers>=2.7.0", "torch>=2.0.0"],
+    "gte-qwen2": ["sentence-transformers>=2.7.0", "torch>=2.0.0"],
+    "nomic": ["sentence-transformers>=2.7.0", "nomic>=3.0.0"],
+    "ollama": ["ollama>=0.2.0"],
+}
+
+VECTORDB_DEPS = {
+    "chroma": ["chromadb>=0.5.0"],
+    "pinecone": ["pinecone-client>=3.0.0"],
+    "weaviate": ["weaviate-client>=4.6.0"],
+    "qdrant": ["qdrant-client>=1.9.0"],
+    "pgvector": ["pgvector>=0.2.0", "psycopg2-binary>=2.9.0", "sqlalchemy>=2.0.0"],
+}
+
+OBSERVABILITY_DEPS = {
+    "langfuse": ["langfuse>=2.30.0"],
+    "langsmith": ["langsmith>=0.1.0"],
+    "opentelemetry": [
+        "opentelemetry-api>=1.25.0",
+        "opentelemetry-sdk>=1.25.0",
+        "opentelemetry-exporter-otlp>=1.25.0",
+        "opentelemetry-instrumentation-fastapi>=0.46b0",
+    ],
+    "none": [],
+}
+
+UI_DEPS = {
+    "streamlit": ["streamlit>=1.35.0"],
+    "gradio": ["gradio>=4.30.0"],
+    "nextjs": ["fastapi>=0.111.0", "uvicorn>=0.30.0"],
+    "none": [],
+}
+
+RAG_DEPS = [
+    "tiktoken>=0.7.0",
+]
+
+GUARDRAIL_DEPS = [
+    "presidio-analyzer>=2.2.0",
+    "presidio-anonymizer>=2.2.0",
+]
+
+API_DEPS = [
+    "fastapi>=0.111.0",
+    "uvicorn>=0.30.0",
+    "pydantic>=2.7.0",
+]
+
+MCP_DEPS = [
+    "mcp>=1.0.0",
+]
+
+NOTEBOOK_DEPS = [
+    "jupyter>=1.0.0",
+    "notebook>=7.0.0",
+    "pandas>=2.2.0",
+    "numpy>=1.26.0",
+    "matplotlib>=3.8.0",
+    "seaborn>=0.13.0",
+]
+
+DATA_LAYER_DEPS = [
+    "pandas>=2.2.0",
+    "numpy>=1.26.0",
+]
+
+DATA_FORMAT_DEPS = {
+    "csv": [],
+    "parquet": ["pyarrow>=16.0.0"],
+    "json": [],
+    "sql": ["sqlalchemy>=2.0.0", "psycopg2-binary>=2.9.0"],
+}
+
+ML_FRAMEWORK_DEPS = {
+    "sklearn": ["scikit-learn>=1.5.0", "joblib>=1.4.0"],
+    "pytorch": ["torch>=2.0.0", "scikit-learn>=1.5.0"],
+    "xgboost": ["xgboost>=2.0.0", "scikit-learn>=1.5.0", "joblib>=1.4.0"],
+    "transformers": [
+        "transformers>=4.40.0",
+        "datasets>=2.19.0",
+        "torch>=2.0.0",
+        "accelerate>=0.30.0",
+        "scikit-learn>=1.5.0",
+    ],
+}
+
+
+def generate_requirements(config: dict, project_path: Path):
+    """Generate requirements.txt based on project configuration."""
+    deps = set()
+
+    # Base
+    deps.update(BASE_DEPS)
+
+    # Framework
+    deps.update(FRAMEWORK_DEPS.get(config["framework"], []))
+
+    # LLM provider
+    deps.update(LLM_DEPS.get(config["llm_provider"], []))
+
+    # LangChain-specific LLM packages
+    if config["framework"] == "langchain":
+        deps.update(LANGCHAIN_LLM_DEPS.get(config["llm_provider"], []))
+
+    # Embedding
+    deps.update(EMBEDDING_DEPS.get(config["embedding_model"], []))
+
+    # Vector DB
+    deps.update(VECTORDB_DEPS.get(config["vector_db"], []))
+
+    # Observability
+    deps.update(OBSERVABILITY_DEPS.get(config["observability"], []))
+
+    # UI
+    deps.update(UI_DEPS.get(config["ui"], []))
+
+    # Optional features
+    if config["include_rag"]:
+        deps.update(RAG_DEPS)
+
+    if config["include_guardrails"]:
+        deps.update(GUARDRAIL_DEPS)
+
+    if config["include_mcp"]:
+        deps.update(MCP_DEPS)
+
+    # Notebooks
+    if config.get("include_notebooks"):
+        deps.update(NOTEBOOK_DEPS)
+
+    # Data layer
+    if config.get("include_data_layer"):
+        deps.update(DATA_LAYER_DEPS)
+        deps.update(DATA_FORMAT_DEPS.get(config.get("data_format", "csv"), []))
+
+    # ML Pipeline
+    if config.get("include_ml_pipeline"):
+        deps.update(ML_FRAMEWORK_DEPS.get(config.get("ml_framework", "sklearn"), []))
+
+    # API layer (always included for non-CLI projects)
+    if config["ui"] not in ("none", "streamlit", "gradio"):
+        deps.update(API_DEPS)
+
+    # Sort and write
+    sorted_deps = sorted(deps, key=lambda x: x.lower())
+    req_content = "# Generated by LaunchpadAI\n"
+    req_content += f"# Framework: {config['framework']}\n"
+    req_content += f"# LLM: {config['llm_provider']}\n"
+    req_content += f"# Vector DB: {config['vector_db']}\n\n"
+    req_content += "\n".join(sorted_deps) + "\n"
+
+    with open(project_path / "requirements.txt", "w") as f:
+        f.write(req_content)
