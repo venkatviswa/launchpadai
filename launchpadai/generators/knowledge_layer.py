@@ -84,16 +84,38 @@ class DocumentLoader:
             "file_type": path.suffix,
         }
 
+    # Maximum file size to load (default 50MB) — prevents resource exhaustion
+    MAX_FILE_SIZE = 50 * 1024 * 1024
+
     def load_directory(self, dir_path: str | Path) -> list[dict]:
-        """Load all supported files from a directory."""
-        dir_path = Path(dir_path)
+        """Load all supported files from a directory.
+
+        Security: validates that files are within the target directory
+        to prevent path traversal attacks.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        dir_path = Path(dir_path).resolve()
         documents = []
         for file in sorted(dir_path.rglob("*")):
             if file.suffix in self.SUPPORTED and file.is_file():
+                # Path traversal protection — ensure file is within base directory
+                try:
+                    file.resolve().relative_to(dir_path)
+                except ValueError:
+                    logger.warning(f"Skipping file outside base directory: {file}")
+                    continue
+
+                # File size check — prevent loading excessively large files
+                if file.stat().st_size > self.MAX_FILE_SIZE:
+                    logger.warning(f"Skipping oversized file ({file.stat().st_size} bytes): {file.name}")
+                    continue
+
                 try:
                     documents.append(self.load_file(file))
                 except Exception as e:
-                    print(f"Warning: Could not load {file}: {e}")
+                    logger.warning(f"Could not load {file.name}: {e}")
         return documents
 
     def _load_pdf(self, path: Path) -> dict:

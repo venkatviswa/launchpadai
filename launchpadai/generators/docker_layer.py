@@ -27,7 +27,10 @@ def generate_docker_layer(config: dict, project_path: Path):
     ports:
       - "8080:8080"
     environment:
-      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      # Security: disable anonymous access in production
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "${WEAVIATE_ANON_ACCESS:-false}"
+      AUTHENTICATION_APIKEY_ENABLED: "true"
+      AUTHENTICATION_APIKEY_ALLOWED_KEYS: "${WEAVIATE_API_KEY:-change-me}"
     volumes:
       - weaviate_data:/var/lib/weaviate''',
         "pgvector": '''
@@ -36,9 +39,9 @@ def generate_docker_layer(config: dict, project_path: Path):
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: agent
-      POSTGRES_PASSWORD: agent
-      POSTGRES_DB: vectors
+      POSTGRES_USER: ${POSTGRES_USER:-agent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-vectors}
     volumes:
       - pg_data:/var/lib/postgresql/data''',
     }
@@ -82,13 +85,21 @@ volumes:
 
 WORKDIR /app
 
+# Security: Create non-root user
+RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Security: Change ownership and switch to non-root user
+RUN chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 
+# Security: Bind to 0.0.0.0 is required in Docker but restrict in production via network policies
 CMD ["uvicorn", "api.routes:app", "--host", "0.0.0.0", "--port", "8000"]
 '''
     _write(project_path / "Dockerfile", dockerfile)

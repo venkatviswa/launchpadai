@@ -54,6 +54,10 @@ class ToolRegistry:
         """Get a tool by name."""
         return self._tools.get(name)
 
+    def has_tool(self, name: str) -> bool:
+        """Check if a tool is registered (safe pre-execution check)."""
+        return name in self._tools
+
     def execute(self, name: str, **kwargs):
         """Execute a tool by name."""
         tool = self._tools.get(name)

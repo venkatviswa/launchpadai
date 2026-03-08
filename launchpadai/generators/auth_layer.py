@@ -40,20 +40,35 @@ Supports:
 
 For production, replace with a proper identity provider
 (Auth0, Clerk, Supabase Auth, AWS Cognito, etc.)
+
+Security notes:
+- Uses hmac.compare_digest for constant-time comparison (timing attack resistant)
+- Session tokens generated via secrets.token_urlsafe (cryptographically secure)
+- Sessions expire after configurable TTL (default: 24 hours)
+- For production: migrate sessions to Redis/DB, use bcrypt/argon2 for password hashing,
+  enforce HTTPS, and consider a proper identity provider.
 """
+import hmac
 import os
-import hashlib
 import secrets
 import time
+import logging
 from functools import wraps
+
+logger = logging.getLogger(__name__)
 
 
 class AuthProvider:
     """Authenticate users against configured credentials."""
 
+    # Maximum failed auth attempts before temporary lockout
+    MAX_FAILED_ATTEMPTS = 10
+    LOCKOUT_SECONDS = 300  # 5 minutes
+
     def __init__(self):
         self.mode = os.getenv("AUTH_MODE", "''' + auth + '''")
         self._sessions: dict[str, dict] = {}  # token -> {user, expires}
+        self._failed_attempts: dict[str, dict] = {}  # identifier -> {count, locked_until}
 
     def authenticate(self, username: str = None, password: str = None) -> dict:
         """Validate credentials and return result.
@@ -61,15 +76,30 @@ class AuthProvider:
         Returns:
             {"authenticated": bool, "user": str, "token": str, "error": str}
         """
+        # Rate limiting on failed attempts
+        identifier = username or "simple"
+        if self._is_locked_out(identifier):
+            logger.warning(f"Auth lockout active for identifier: {identifier}")
+            return {"authenticated": False, "error": "Too many failed attempts. Try again later."}
+
         if self.mode == "simple":
-            return self._auth_simple(password)
+            result = self._auth_simple(password)
         elif self.mode == "multi_user":
-            return self._auth_multi_user(username, password)
+            result = self._auth_multi_user(username, password)
         else:
             return {"authenticated": True, "user": "anonymous", "token": ""}
 
+        if not result.get("authenticated"):
+            self._record_failed_attempt(identifier)
+        else:
+            self._clear_failed_attempts(identifier)
+
+        return result
+
     def validate_token(self, token: str) -> dict | None:
         """Validate a session token. Returns user info or None."""
+        if not token or not isinstance(token, str):
+            return None
         session = self._sessions.get(token)
         if not session:
             return None
@@ -87,7 +117,7 @@ class AuthProvider:
                 "error": "APP_PASSWORD not set in .env. Add it to enable auth.",
             }
 
-        if self._constant_time_compare(password or "", expected):
+        if hmac.compare_digest((password or "").encode(), expected.encode()):
             token = self._create_session("user")
             return {"authenticated": True, "user": "user", "token": token}
         return {"authenticated": False, "error": "Invalid password"}
@@ -111,7 +141,11 @@ class AuthProvider:
                 u, p = pair.split(":", 1)
                 users[u.strip()] = p.strip()
 
-        if username in users and self._constant_time_compare(password or "", users[username]):
+        # Always perform comparison even if user not found (prevent user enumeration)
+        expected = users.get(username, "")
+        dummy_check = hmac.compare_digest((password or "").encode(), expected.encode())
+
+        if username in users and dummy_check:
             token = self._create_session(username)
             return {"authenticated": True, "user": username, "token": token}
 
@@ -126,18 +160,33 @@ class AuthProvider:
         }
         return token
 
-    def _constant_time_compare(self, a: str, b: str) -> bool:
-        """Constant-time string comparison to prevent timing attacks."""
-        return hmac_compare(a.encode(), b.encode())
+    def _is_locked_out(self, identifier: str) -> bool:
+        """Check if an identifier is locked out due to failed attempts."""
+        info = self._failed_attempts.get(identifier)
+        if not info:
+            return False
+        if info.get("locked_until") and time.time() < info["locked_until"]:
+            return True
+        if info.get("locked_until") and time.time() >= info["locked_until"]:
+            del self._failed_attempts[identifier]
+            return False
+        return False
+
+    def _record_failed_attempt(self, identifier: str):
+        """Record a failed authentication attempt."""
+        info = self._failed_attempts.setdefault(identifier, {"count": 0})
+        info["count"] += 1
+        if info["count"] >= self.MAX_FAILED_ATTEMPTS:
+            info["locked_until"] = time.time() + self.LOCKOUT_SECONDS
+            logger.warning(f"Auth lockout triggered for: {identifier}")
+
+    def _clear_failed_attempts(self, identifier: str):
+        """Clear failed attempts after successful auth."""
+        self._failed_attempts.pop(identifier, None)
 
     def logout(self, token: str):
         """Invalidate a session token."""
         self._sessions.pop(token, None)
-
-
-def hmac_compare(a: bytes, b: bytes) -> bool:
-    """Constant-time comparison."""
-    return hashlib.sha256(a).hexdigest() == hashlib.sha256(b).hexdigest()
 
 
 # Singleton
