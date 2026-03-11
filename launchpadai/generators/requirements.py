@@ -33,6 +33,9 @@ FRAMEWORK_DEPS = {
     "haystack": [
         "haystack-ai>=2.2.0",
     ],
+    "agentscript": [
+        "simple-salesforce>=1.12.0",
+    ],
 }
 
 # Additional LangChain provider packages

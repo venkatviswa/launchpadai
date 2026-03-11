@@ -4,7 +4,7 @@ import pytest
 from launchpadai.generators.agents_layer import generate_agents_layer
 
 
-FRAMEWORKS = ["plain", "langchain", "llamaindex", "crewai", "haystack"]
+FRAMEWORKS = ["plain", "langchain", "llamaindex", "crewai", "haystack", "agentscript"]
 
 EXPECTED_FILES = {
     "plain": "base.py",
@@ -12,6 +12,7 @@ EXPECTED_FILES = {
     "llamaindex": "agent.py",
     "crewai": "crew.py",
     "haystack": "base.py",  # falls back to plain
+    "agentscript": "client.py",
 }
 
 
@@ -106,3 +107,59 @@ def test_llamaindex_has_react_agent(tmp_path, make_config):
 
     content = (tmp_path / "agents" / "agent.py").read_text()
     assert "ReActAgent" in content
+
+
+@pytest.mark.unit
+def test_agentscript_has_client(tmp_path, make_config):
+    config = make_config(framework="agentscript")
+    generate_agents_layer(config, tmp_path)
+
+    content = (tmp_path / "agents" / "client.py").read_text()
+    assert "class AgentforceClient" in content
+    assert "def run" in content
+
+
+@pytest.mark.unit
+def test_agentscript_has_agent_file(tmp_path, make_config):
+    config = make_config(framework="agentscript")
+    generate_agents_layer(config, tmp_path)
+
+    agent_dirs = list((tmp_path / "force-app" / "main" / "aiAuthoringBundles").iterdir())
+    assert len(agent_dirs) == 1
+    agent_files = list(agent_dirs[0].glob("*.agent"))
+    assert len(agent_files) == 1
+    content = agent_files[0].read_text()
+    assert "system:" in content
+    assert "topic main_assistant:" in content
+    assert "start_agent:" in content
+
+
+@pytest.mark.unit
+def test_agentscript_has_sfdx_project(tmp_path, make_config):
+    config = make_config(framework="agentscript")
+    generate_agents_layer(config, tmp_path)
+
+    assert (tmp_path / "sfdx-project.json").exists()
+    import json
+    sfdx = json.loads((tmp_path / "sfdx-project.json").read_text())
+    assert "packageDirectories" in sfdx
+
+
+@pytest.mark.unit
+def test_agentscript_includes_rag_action_when_enabled(tmp_path, make_config):
+    config = make_config(framework="agentscript", include_rag=True)
+    generate_agents_layer(config, tmp_path)
+
+    agent_dirs = list((tmp_path / "force-app" / "main" / "aiAuthoringBundles").iterdir())
+    content = list(agent_dirs[0].glob("*.agent"))[0].read_text()
+    assert "retrieve_knowledge" in content
+
+
+@pytest.mark.unit
+def test_agentscript_includes_guardrail_instructions_when_enabled(tmp_path, make_config):
+    config = make_config(framework="agentscript", include_guardrails=True)
+    generate_agents_layer(config, tmp_path)
+
+    agent_dirs = list((tmp_path / "force-app" / "main" / "aiAuthoringBundles").iterdir())
+    content = list(agent_dirs[0].glob("*.agent"))[0].read_text()
+    assert "SAFETY" in content

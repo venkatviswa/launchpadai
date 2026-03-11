@@ -54,6 +54,16 @@ def generate_config_files(config: dict, project_path: Path):
         "",
     ]
 
+    if config["framework"] == "agentscript":
+        env_lines.extend([
+            "# === Salesforce Agentforce ===",
+            "SF_INSTANCE_URL=https://your-org.my.salesforce.com",
+            "SF_CLIENT_ID=your-connected-app-client-id",
+            "SF_CLIENT_SECRET=your-connected-app-client-secret",
+            "SF_AGENT_ID=your-agentforce-agent-id",
+            "",
+        ])
+
     if config["observability"] != "none":
         env_lines.extend([
             "# === Observability ===",

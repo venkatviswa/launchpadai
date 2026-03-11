@@ -11,6 +11,7 @@ def generate_api_layer(config: dict, project_path: Path):
         "langchain": "from agents.graph import agent",
         "llamaindex": "from agents.agent import agent",
         "crewai": "from agents.crew import run_crew",
+        "agentscript": "from agents.client import agent",
     }.get(config["framework"], "from agents.base import agent")
 
     agent_call = "run_crew(request.message)" if config["framework"] == "crewai" else 'agent.run(request.message, session_id=request.session_id)'
