@@ -1,6 +1,6 @@
 # LaunchpadAI
 
-**The Spring Initializr for Agentic AI Applications**
+
 
 LaunchpadAI is an interactive CLI that scaffolds production-ready agentic AI projects in seconds. Instead of spending days wiring together LLMs, vector databases, frameworks, and UIs, answer a few questions and get a fully functional, well-architected project — ready to customize and deploy.
 
