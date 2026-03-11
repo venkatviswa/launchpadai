@@ -93,7 +93,7 @@ _PAIRWISE_KEYS = [
 ]
 
 _PAIRWISE_PARAMETERS = [
-    ["plain", "langchain", "llamaindex", "crewai", "haystack"],
+    ["plain", "langchain", "llamaindex", "crewai", "haystack", "agentscript"],
     ["openai", "anthropic", "google", "ollama", "multiple"],
     ["openai-small", "openai-large", "cohere", "bge-m3", "gte-qwen2", "nomic", "ollama"],
     ["chroma", "pinecone", "weaviate", "qdrant", "pgvector"],

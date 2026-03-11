@@ -57,6 +57,7 @@ def gather_project_config(project_name: str) -> dict:
             "LlamaIndex",
             "CrewAI",
             "Haystack",
+            "Salesforce AgentScript (Agentforce DX)",
         ],
         default="Plain Python (no framework, full control)",
     )
@@ -68,6 +69,7 @@ def gather_project_config(project_name: str) -> dict:
         "LlamaIndex": "llamaindex",
         "CrewAI": "crewai",
         "Haystack": "haystack",
+        "Salesforce AgentScript (Agentforce DX)": "agentscript",
     }[framework]
 
     # 2. LLM Provider
