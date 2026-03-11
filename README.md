@@ -79,7 +79,7 @@ launchpad init my-agent --output ~/projects
 ```
 
 The wizard guides you through selecting:
-- Agent framework (LangChain, LlamaIndex, CrewAI, Haystack, or plain Python)
+- Agent framework (LangChain, LlamaIndex, CrewAI, Haystack, Salesforce AgentScript, or plain Python)
 - LLM provider and embedding model
 - Vector database for RAG
 - UI framework and authentication
@@ -138,6 +138,7 @@ LaunchpadAI supports 19 configuration dimensions. Here's what you can choose:
 | **LlamaIndex** | Data-centric agent framework |
 | **CrewAI** | Multi-agent collaboration framework |
 | **Haystack** | Pipeline-based NLP framework |
+| **Salesforce AgentScript** | Agentforce DX — declarative agents deployed to Salesforce |
 
 ### LLM Provider
 
@@ -272,6 +273,16 @@ my-ai-agent/
 
 Only the layers you enable are generated — a minimal project (plain Python, no RAG, no UI) produces just the core agent, models, and API layers.
 
+**Salesforce AgentScript projects** additionally generate a Salesforce DX structure:
+
+```
+my-ai-agent/
+├── force-app/main/aiAuthoringBundles/  # AgentScript DSL files (.agent)
+├── sfdx-project.json                   # Salesforce DX project config
+├── agents/client.py                    # Python SDK client for Agentforce API
+└── ...                                 # Standard layers (API, config, etc.)
+```
+
 ---
 
 ## Architecture
@@ -342,7 +353,7 @@ pip install -e ".[dev]"
 
 ### Running Tests
 
-The test suite includes 365+ tests across unit, integration, and validation layers:
+The test suite includes 381+ tests across unit, integration, and validation layers:
 
 ```bash
 # Run all tests
@@ -389,7 +400,7 @@ The pairwise suite uses [allpairspy](https://github.com/thombashi/allpairspy) to
 
 **Generated projects use (based on your selections):**
 - FastAPI, Pydantic (API layer)
-- LangChain/LangGraph, LlamaIndex, CrewAI, Haystack (frameworks)
+- LangChain/LangGraph, LlamaIndex, CrewAI, Haystack, Salesforce AgentScript (frameworks)
 - OpenAI, Anthropic, Google, Ollama SDKs (LLM providers)
 - ChromaDB, Pinecone, Weaviate, Qdrant, pgvector (vector stores)
 - Streamlit, Gradio, Next.js (UIs)
@@ -404,7 +415,7 @@ The pairwise suite uses [allpairspy](https://github.com/thombashi/allpairspy) to
 ## Project Stats
 
 - **22 generator modules** producing different architectural layers
-- **5** agent framework options
+- **6** agent framework options
 - **5** LLM providers
 - **7** embedding model options
 - **5** vector database options
@@ -413,7 +424,7 @@ The pairwise suite uses [allpairspy](https://github.com/thombashi/allpairspy) to
 - **3** observability platforms
 - **4** ML framework options
 - **~12.9 million** possible configuration combinations
-- **365+** automated tests
+- **381+** automated tests
 
 ---
 
