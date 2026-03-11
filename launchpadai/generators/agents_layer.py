@@ -108,15 +108,19 @@ class Agent:
 
             if tool_calls:
                 for tool_call in tool_calls:
-                    # Execute the tool
-                    try:
-                        result = registry.execute(
-                            tool_call["name"],
-                            **tool_call["arguments"],
-                        )
-                        result_str = json.dumps(result) if not isinstance(result, str) else result
-                    except Exception as e:
-                        result_str = f"Tool error: {{e}}"
+                    # Validate tool name is registered before execution (OWASP Agentic AI)
+                    tool_name = tool_call.get("name", "")
+                    if not registry.has_tool(tool_name):
+                        result_str = f"Tool '{{tool_name}}' is not registered."
+                    else:
+                        try:
+                            result = registry.execute(
+                                tool_name,
+                                **tool_call.get("arguments", {{}}),
+                            )
+                            result_str = json.dumps(result) if not isinstance(result, str) else result
+                        except Exception as e:
+                            result_str = f"Tool error: {{type(e).__name__}}"
 
                     # Add tool call and result to messages
                     messages.append({{"role": "assistant", "content": None, "tool_calls": [tool_call]}})

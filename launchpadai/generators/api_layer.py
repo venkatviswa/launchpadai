@@ -16,28 +16,46 @@ def generate_api_layer(config: dict, project_path: Path):
     agent_call = "run_crew(request.message)" if config["framework"] == "crewai" else 'agent.run(request.message, session_id=request.session_id)'
 
     _write(base / "routes.py", f'''"""FastAPI routes — HTTP API for the agent."""
-from fastapi import FastAPI
+import os
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from typing import Optional
 
 {agent_import}
 
 app = FastAPI(title="{config['project_name']} API", version="0.1.0")
 
-# CORS — allow the test UI to connect
+# CORS — restrict origins for security
+# Configure ALLOWED_ORIGINS in .env (comma-separated), defaults to localhost only
+_allowed_origins = os.getenv(
+    "ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8501"
+).split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in _allowed_origins],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 
+# --- Security headers middleware ---
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    return response
+
+
 class ChatRequest(BaseModel):
-    message: str
-    session_id: Optional[str] = "default"
+    message: str = Field(..., min_length=1, max_length=10000, description="User message")
+    session_id: Optional[str] = Field("default", max_length=128)
 
 
 class ChatResponse(BaseModel):
