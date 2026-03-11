@@ -291,6 +291,19 @@ safety check                 # Alternative scanner
 | `generators/docker_layer.py` | Non-root user, credential externalization |
 | `generators/agents_layer.py` | Tool existence validation, error sanitization |
 | `generators/tools_layer.py` | Added `has_tool()` method |
+| `generators/agents_layer.py` | Added AgentScript framework with Salesforce OAuth2 auth, session-scoped API calls |
+
+---
+
+## Salesforce AgentScript Security Notes
+
+The AgentScript framework integration follows Salesforce security best practices:
+
+- **OAuth2 Client Credentials** — Agent API authentication uses the standard Salesforce connected-app client credentials flow (no hardcoded tokens)
+- **Environment-based secrets** — `SF_CLIENT_ID`, `SF_CLIENT_SECRET`, `SF_INSTANCE_URL`, and `SF_AGENT_ID` are loaded from environment variables, never committed to code
+- **Session isolation** — Each conversation uses a separate Agentforce session via `externalSessionKey`, preventing cross-session data leakage
+- **Declarative safety** — AgentScript's `.agent` DSL files include guardrail instructions directly in the reasoning block when guardrails are enabled
+- **No raw credential storage** — Access tokens are obtained at runtime and held only in memory
 
 ---
 
