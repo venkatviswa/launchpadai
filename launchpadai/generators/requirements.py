@@ -6,6 +6,8 @@ from pathlib import Path
 BASE_DEPS = [
     "python-dotenv>=1.0.0",
     "pyyaml>=6.0",
+    # The generated tests/ suite runs offline against the mock LLM provider
+    "pytest>=8.0.0",
 ]
 
 LLM_DEPS = {

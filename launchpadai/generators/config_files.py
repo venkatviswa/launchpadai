@@ -38,6 +38,7 @@ def generate_config_files(config: dict, project_path: Path):
         f"# Generated configuration\n",
         "# === LLM Provider ===",
         ENV_VARS.get(config["llm_provider"], ""),
+        "# LLM_MOCK=1   # offline mode: deterministic mock LLM, no API keys needed",
         "",
         "# === Embedding Model ===",
         EMBEDDING_ENV.get(config["embedding_model"], ""),
@@ -83,6 +84,9 @@ class Settings:
 
     # LLM
     LLM_PROVIDER = "{config['llm_provider']}"
+    # Offline mode: swap the LLM for a deterministic mock (models/llm/mock.py).
+    # Used by the generated tests; also handy for developing without API keys.
+    LLM_MOCK = os.getenv("LLM_MOCK", "").lower() in ("1", "true", "yes")
 '''
 
     if config["llm_provider"] == "openai":

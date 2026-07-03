@@ -2,6 +2,17 @@
 from pathlib import Path
 
 
+# Replaces the plain singleton at the bottom of every provider template so
+# LLM_MOCK=1 swaps in the offline mock without constructing the real client.
+_SINGLETON_SWITCH = '''# Singleton instance — set LLM_MOCK=1 for offline development and tests
+if settings.LLM_MOCK:
+    from models.llm.mock import MockLLMProvider
+
+    llm = MockLLMProvider()
+else:
+    llm = LLMProvider()'''
+
+
 def generate_models_layer(config: dict, project_path: Path):
     """Generate LLM and embedding model wrapper files."""
 
@@ -9,13 +20,87 @@ def generate_models_layer(config: dict, project_path: Path):
     _write(project_path / "models" / "llm" / "__init__.py", "")
     _write(project_path / "models" / "embeddings" / "__init__.py", "")
 
-    # LLM Provider
+    # LLM Provider (with LLM_MOCK switch on the singleton)
     llm_code = _get_llm_provider(config)
+    llm_code = llm_code.replace("# Singleton instance\nllm = LLMProvider()", _SINGLETON_SWITCH)
     _write(project_path / "models" / "llm" / "provider.py", llm_code)
+
+    # Mock LLM provider — offline development and generated tests
+    _write(project_path / "models" / "llm" / "mock.py", _MOCK_PROVIDER)
 
     # Embedding Provider
     emb_code = _get_embedding_provider(config)
     _write(project_path / "models" / "embeddings" / "provider.py", emb_code)
+
+
+_MOCK_PROVIDER = '''"""Mock LLM Provider — deterministic, offline stand-in for the real provider.
+
+Enable it by setting LLM_MOCK=1 (see config/settings.py). No API keys, no
+network. Useful for developing offline and for the generated tests.
+
+Script behavior from tests:
+
+    from models.llm.provider import llm  # MockLLMProvider when LLM_MOCK=1
+
+    llm.queue_tool_call("get_current_time", {"timezone": "UTC"})
+    llm.queue_response("The current time was retrieved.")
+    result = agent.run("What time is it?")
+
+Unqueued calls echo the last user message, so any conversation works
+out of the box.
+"""
+
+
+class MockLLMProvider:
+    """Records every call and replays queued responses (or echoes)."""
+
+    def __init__(self):
+        self.calls: list[dict] = []
+        self._queue: list[dict] = []
+
+    def reset(self):
+        """Clear recorded calls and any queued responses."""
+        self.calls = []
+        self._queue = []
+
+    def queue_response(self, text: str):
+        """Queue a plain text response for the next chat() call."""
+        self._queue.append({"message": {"content": text}})
+
+    def queue_tool_call(self, name: str, arguments: dict = None, call_id: str = None):
+        """Queue a tool call for the next chat() call."""
+        self._queue.append({
+            "message": {
+                "content": "",
+                "tool_calls": [{
+                    "id": call_id or f"mock_call_{len(self._queue)}",
+                    "function": {"name": name, "arguments": arguments or {}},
+                }],
+            }
+        })
+
+    def _last_user_message(self, messages: list[dict]) -> str:
+        for m in reversed(messages):
+            if m.get("role") == "user" and isinstance(m.get("content"), str):
+                return m["content"]
+        return ""
+
+    def chat(self, messages: list[dict], tools: list[dict] = None, **kwargs) -> dict:
+        """Return the next queued response, or echo the last user message.
+
+        Responses use the same dict shape the agent loop already understands
+        (see Agent._extract_text / _extract_tool_calls).
+        """
+        self.calls.append({"messages": list(messages), "tools": tools})
+        if self._queue:
+            return self._queue.pop(0)
+        return {"message": {"content": f"[mock response] You said: {self._last_user_message(messages)}"}}
+
+    def simple(self, prompt: str) -> str:
+        """Simple single-turn completion."""
+        response = self.chat([{"role": "user", "content": prompt}])
+        return response["message"]["content"]
+'''
 
 
 def _get_llm_provider(config: dict) -> str:

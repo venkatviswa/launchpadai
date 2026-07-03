@@ -103,3 +103,19 @@ def test_render_install_import(tmp_path, case):
         f"entrypoint import failed for {case}:\n{result.stderr[-3000:]}"
     )
     assert "entrypoint OK" in result.stdout
+
+    # The generated project ships its own offline test suite (mock LLM) —
+    # run it. This executes agent.run() end to end for adapters whose loop
+    # uses the shared provider, and the entrypoint contract everywhere.
+    tests_result = subprocess.run(
+        [py, "-m", "pytest", "tests", "-q"],
+        cwd=str(project),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+    assert tests_result.returncode == 0, (
+        f"generated test suite failed for {case}:\n"
+        f"{tests_result.stdout[-3000:]}\n{tests_result.stderr[-2000:]}"
+    )

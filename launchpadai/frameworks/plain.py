@@ -311,4 +311,5 @@ ADAPTER = FrameworkAdapter(
     description="No framework — explicit, dependency-free agent loop with full control",
     orchestrations=("single", "sequential", "supervisor"),
     generate=generate,
+    uses_llm_provider=True,
 )

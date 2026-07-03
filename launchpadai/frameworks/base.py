@@ -22,6 +22,11 @@ class FrameworkAdapter(BaseModel):
     description: str
     orchestrations: tuple[str, ...]  # subset of {"single", "sequential", "supervisor"}
     generate: Callable[..., None]  # (config: ProjectConfig, project_path: Path) -> None
+    # True when the adapter's orchestration calls models/llm/provider.py directly,
+    # so the generated mock LLM provider (LLM_MOCK=1) can drive the full agent loop
+    # offline. Frameworks that construct their own LLM clients (LangGraph, CrewAI)
+    # get entrypoint-level tests instead.
+    uses_llm_provider: bool = False
 
 
 def write(path: Path, content: str):

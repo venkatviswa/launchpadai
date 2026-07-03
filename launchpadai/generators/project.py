@@ -27,6 +27,7 @@ from launchpadai.generators.data_layer import generate_data_layer
 from launchpadai.generators.ml_pipeline import generate_ml_pipeline
 from launchpadai.generators.observability_layer import generate_observability_layer
 from launchpadai.generators.auth_layer import generate_auth_layer
+from launchpadai.generators.tests_layer import generate_tests_layer
 
 console = Console()
 
@@ -68,6 +69,7 @@ class ProjectGenerator:
                 ("Generating test UI...", lambda: generate_ui_layer(self.config, self.path)),
                 ("Creating Docker setup...", lambda: generate_docker_layer(self.config, self.path)),
                 ("Writing scripts...", lambda: generate_scripts_layer(self.config, self.path)),
+                ("Generating tests...", lambda: generate_tests_layer(self.config, self.path)),
                 ("Generating CLI runner...", lambda: generate_cli_runner(self.config, self.path)),
                 ("Writing requirements.txt...", lambda: generate_requirements(self.config, self.path)),
                 ("Saving project config...", self._save_config),

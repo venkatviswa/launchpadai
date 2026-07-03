@@ -21,6 +21,7 @@ Building an AI agent today means making dozens of decisions before writing a sin
 - **Multi-agent by design** — define a team of agents (each with its own prompt and tools) and pick an orchestration mode: single, sequential pipeline, or supervisor routing
 - A **framework-adapter architecture** — the same project layout whether you pick plain Python, LangGraph, or CrewAI; only the orchestration files differ
 - A **uniform entrypoint** — `from agents import agent; agent.run(msg, session_id)` works identically across every framework, with guardrails and tracing wired at ingress/egress
+- **Tests that pass on day one** — every project ships a pytest suite that runs fully offline against a built-in mock LLM provider (`LLM_MOCK=1`), so `pytest tests` works before you add a single API key
 - **Auto-generated architecture diagrams** (Mermaid) showing your request flow
 - **Evaluation framework** with test cases to measure agent quality from day one
 - **Docker setup** for one-command deployment
@@ -65,7 +66,9 @@ launchpad init research-crew \
 
 ```bash
 cd my-agent
-cp .env.example .env   # add your API keys
+pip install -r requirements.txt
+pytest tests            # runs offline against the mock LLM — no keys needed
+cp .env.example .env    # add your API keys (or set LLM_MOCK=1 to stay offline)
 launchpad run
 ```
 
@@ -287,7 +290,7 @@ uv run pytest tests/smoke -m slow     # render → install → import smoke test
 | **Unit** | Each generator in isolation with parametrized configs |
 | **Integration** | Full project generation, edge cases, cross-generator consistency (pairwise via allpairspy) |
 | **Validation** | All generated `.py`, `.yaml`, `.json`, `.ipynb` files parse correctly |
-| **Smoke** | Each adapter's generated project installs its requirements and imports its entrypoint against real, current framework releases |
+| **Smoke** | Each adapter's generated project installs its requirements, imports its entrypoint, and passes its own generated test suite against real, current framework releases |
 
 CI runs the fast suite on every push, plus one smoke lane per framework adapter — an upstream breaking release fails only its adapter's lane.
 
