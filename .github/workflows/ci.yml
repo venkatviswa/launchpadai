@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    name: Unit / integration / validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: uv sync
+      - name: Run fast tests
+        run: uv run pytest -q -m "not slow"
+
+  smoke:
+    name: "Smoke: ${{ matrix.adapter }}"
+    # One lane per framework adapter: an upstream breaking release fails
+    # only its own adapter's lane, never core.
+    needs: tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        adapter: [plain, langgraph, crewai, agentscript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: uv sync
+      - name: Render → install → import
+        run: uv run pytest tests/smoke -q -m slow -k "${{ matrix.adapter }}"

@@ -1,8 +1,6 @@
 # LaunchpadAI
 
-
-
-LaunchpadAI is an interactive CLI that scaffolds production-ready agentic AI projects in seconds. Instead of spending days wiring together LLMs, vector databases, frameworks, and UIs, answer a few questions and get a fully functional, well-architected project — ready to customize and deploy.
+LaunchpadAI is an interactive CLI that scaffolds runnable, multi-agent AI projects in seconds. Instead of spending days wiring together LLMs, frameworks, retrieval, guardrails, and UIs, answer a few questions (or pass a few flags) and get a working, well-architected project — ready to customize and deploy.
 
 ---
 
@@ -10,21 +8,21 @@ LaunchpadAI is an interactive CLI that scaffolds production-ready agentic AI pro
 
 Building an AI agent today means making dozens of decisions before writing a single line of business logic:
 
-- Which LLM provider? Which framework? Which vector database?
+- Which framework? Which LLM provider? One agent or a team of agents?
 - How do I structure RAG pipelines, tool calling, and memory?
 - What about guardrails, evaluation, observability, and auth?
 - How do I containerize and deploy this thing?
 
-**LaunchpadAI eliminates this boilerplate.** It generates a complete, opinionated project structure with clean separation of concerns — every layer is independently configurable and production-ready out of the box.
+**LaunchpadAI eliminates this boilerplate.** It generates a complete, opinionated project with clean separation of concerns and a uniform agent interface — every layer independently configurable.
 
 ### What You Get
 
-- A **modular, layered architecture** following AI engineering best practices
-- **Working code** — not stubs. Every generated file is syntactically valid and import-ready
+- **Multi-agent by design** — define a team of agents (each with its own prompt and tools) and pick an orchestration mode: single, sequential pipeline, or supervisor routing
+- A **framework-adapter architecture** — the same project layout whether you pick plain Python, LangGraph, or CrewAI; only the orchestration files differ
+- A **uniform entrypoint** — `from agents import agent; agent.run(msg, session_id)` works identically across every framework, with guardrails and tracing wired at ingress/egress
 - **Auto-generated architecture diagrams** (Mermaid) showing your request flow
 - **Evaluation framework** with test cases to measure agent quality from day one
 - **Docker setup** for one-command deployment
-- **Jupyter notebooks** for data exploration and experimentation
 
 ---
 
@@ -37,28 +35,36 @@ Building an AI agent today means making dozens of decisions before writing a sin
 git clone https://github.com/venkatviswa/launchpadai.git
 cd launchpadai
 
-# Install in development mode
+# With uv (recommended)
+uv sync && uv run launchpad --help
+
+# Or with pip
 pip install -e .
 ```
 
 ### Create Your First Project
 
 ```bash
+# Interactive wizard
 launchpad init my-agent
-```
 
-The interactive wizard walks you through every configuration choice with sensible defaults. When it's done, you'll have a fully scaffolded project.
+# Fully non-interactive (defaults + flags) — great for scripts and AI agents
+launchpad init my-agent --defaults
+
+# A multi-agent research pipeline on LangGraph, no wizard
+launchpad init research-crew \
+  --framework langgraph \
+  --agent "researcher:Research Analyst:Find accurate information" \
+  --agent "writer:Response Writer:Write clear, grounded answers" \
+  --orchestration sequential \
+  --llm anthropic --ui streamlit
+```
 
 ### Run Your Agent
 
 ```bash
 cd my-agent
-
-# Copy the environment template and add your API keys
-cp .env.example .env
-# Edit .env with your keys (OPENAI_API_KEY, etc.)
-
-# Start the agent
+cp .env.example .env   # add your API keys
 launchpad run
 ```
 
@@ -68,99 +74,113 @@ launchpad run
 
 ### `launchpad init [project_name]`
 
-Creates a new agentic AI project through an interactive setup wizard.
+Creates a new agentic AI project. Run with no flags for the interactive wizard, or pass `--defaults` and/or any option flags for a fully non-interactive run (any flag implies non-interactive mode).
 
-```bash
-# Create in current directory
-launchpad init my-agent
+Key flags (see `launchpad init --help` for all):
 
-# Specify output directory
-launchpad init my-agent --output ~/projects
-```
-
-The wizard guides you through selecting:
-- Agent framework (LangChain, LlamaIndex, CrewAI, Haystack, Salesforce AgentScript, or plain Python)
-- LLM provider and embedding model
-- Vector database for RAG
-- UI framework and authentication
-- Observability, guardrails, evaluation, and more
+| Flag | Values |
+|------|--------|
+| `--framework, -f` | `plain`, `langgraph`, `crewai`, `agentscript` |
+| `--llm` | `openai`, `anthropic`, `ollama` |
+| `--agent` | Repeatable `"name:role:goal"` spec for multi-agent teams |
+| `--orchestration` | `single`, `sequential`, `supervisor` |
+| `--retrieval` | `custom`, `llamaindex` |
+| `--rag/--no-rag`, `--guardrails/--no-guardrails`, `--eval/--no-eval`, `--mcp/--no-mcp` | feature toggles |
+| `--observability` | `langfuse`, `langsmith`, `opentelemetry`, `none` |
+| `--ui` | `streamlit`, `gradio`, `nextjs`, `none` |
+| `--defaults, -y` | Use defaults for anything not passed |
+| `--force` | Overwrite an existing directory |
 
 After generation, a `launchpad.yaml` file saves your configuration for reproducibility.
 
 ### `launchpad run [project_dir]`
 
-Runs the agent locally with the configured UI.
-
-```bash
-# Run from project directory
-launchpad run
-
-# Run from another location
-launchpad run ./my-agent
-```
-
-Automatically installs dependencies and launches the appropriate interface (Streamlit, Gradio, Next.js, or CLI).
+Runs the agent locally with the configured UI (Streamlit, Gradio, Next.js, or CLI).
 
 ### `launchpad ingest [project_dir]`
 
-Ingests documents into the vector store for RAG-enabled projects.
-
-```bash
-# Ingest from default data/documents/ directory
-launchpad ingest
-
-# Ingest from a specific source
-launchpad ingest --source ~/my-documents
-```
+Ingests documents into the retrieval layer for RAG-enabled projects (`--source` to point at a directory).
 
 ### `launchpad evaluate [project_dir]`
 
-Runs the evaluation suite against your agent using predefined test cases.
+Runs the evaluation suite (`eval/run_eval.py`) against the test cases in `eval/datasets/test_cases.yaml`.
 
-```bash
-launchpad evaluate
+---
+
+## Multi-Agent Teams
+
+Every project is built from **agent slices**. Each agent you define gets its own vertical slice:
+
+```
+agents/
+├── __init__.py          # Uniform entrypoint: agent.run(...) / agent.reset(...)
+├── researcher/
+│   ├── prompts/system.md   # This agent's system prompt (versioned artifact)
+│   └── tools.py            # Tools only this agent can use
+├── writer/
+│   ├── prompts/system.md
+│   └── tools.py
+└── ...                  # Framework orchestration files (see below)
 ```
 
-Executes `eval/run_eval.py` with the test cases defined in `eval/datasets/test_cases.yaml`.
+Orchestration modes:
+
+| Mode | Behavior |
+|------|----------|
+| `single` | One agent handles every request |
+| `sequential` | Agents run in order; each receives the original request plus the previous agent's output |
+| `supervisor` | A routing step picks the best agent for each request |
+
+How each framework implements them:
+
+| Framework | Files | single | sequential | supervisor |
+|-----------|-------|--------|------------|------------|
+| `plain` | `agents/base.py`, `agents/pipeline.py` | ✅ | ✅ pipeline loop | ✅ LLM router |
+| `langgraph` | `agents/graph.py` | ✅ | ✅ chained nodes | ✅ conditional edges |
+| `crewai` | `agents/crew.py` | ✅ | ✅ `Process.sequential` | ✅ `Process.hierarchical` |
+| `agentscript` | `agents/client.py` + DX bundle | ✅ | — (topics live in Salesforce) | — |
+
+Guardrails and observability tracing are applied in the shared entrypoint (`agents/__init__.py`), so ingress/egress behavior is identical regardless of framework.
 
 ---
 
 ## Configuration Options
 
-LaunchpadAI supports 19 configuration dimensions. Here's what you can choose:
-
 ### Agent Framework
 
-| Framework | Description |
-|-----------|-------------|
-| **Plain Python** | No framework — full control over the agent loop |
-| **LangChain / LangGraph** | Graph-based agent orchestration with LangGraph |
-| **LlamaIndex** | Data-centric agent framework |
-| **CrewAI** | Multi-agent collaboration framework |
-| **Haystack** | Pipeline-based NLP framework |
-| **Salesforce AgentScript** | Agentforce DX — declarative agents deployed to Salesforce |
+| Framework | Tier | Description |
+|-----------|------|-------------|
+| **Plain Python** | 1 | No framework — full control over the agent loop |
+| **LangGraph** | 1 | Graph-based orchestration with checkpointed state |
+| **CrewAI** | 1 | Role-based multi-agent crews |
+| **Salesforce AgentScript** | 2 | Agentforce DX — declarative agents deployed to Salesforce |
+
+Tier 1 adapters are fully supported and smoke-tested in CI (render → install → import). Tier 2 adapters are maintained with a reduced feature surface.
 
 ### LLM Provider
 
 | Provider | Models |
 |----------|--------|
-| **OpenAI** | GPT-4o, GPT-4o-mini |
 | **Anthropic** | Claude |
-| **Google** | Gemini |
+| **OpenAI** | GPT-4o, GPT-4o-mini |
 | **Ollama** | Local models (Llama, Mistral, etc.) |
-| **Multiple** | Configure multiple providers |
+
+### Retrieval Layer (RAG)
+
+| Option | Description |
+|--------|-------------|
+| **Custom pipeline** | Generated chunkers, loaders, and vector-store client — full control |
+| **LlamaIndex** | Managed loading, chunking, and indexing behind the same retriever interface |
+
+The retrieval layer pairs with **any** framework — LlamaIndex is a retrieval option here, not an orchestration framework.
 
 ### Embedding Models
 
 | Model | Type |
 |-------|------|
-| OpenAI text-embedding-3-small | Cloud (API) |
-| OpenAI text-embedding-3-large | Cloud (API) |
-| Cohere embed-v4 | Cloud (API) |
-| BGE-M3 | Local (HuggingFace) |
-| GTE-Qwen2 | Local (HuggingFace) |
+| OpenAI text-embedding-3-small / -large | Cloud (API) |
+| BGE-M3, GTE-Qwen2 | Local (HuggingFace) |
 | Nomic embed-text-v1.5 | Local |
-| Ollama | Local |
 
 ### Vector Databases
 
@@ -168,171 +188,78 @@ LaunchpadAI supports 19 configuration dimensions. Here's what you can choose:
 |----------|------|
 | **ChromaDB** | Local, great for development |
 | **Pinecone** | Managed cloud |
-| **Weaviate** | Managed or self-hosted |
-| **Qdrant** | Managed or self-hosted |
-| **pgvector** | PostgreSQL extension |
 
-### UI Options
+### UI, Auth, Observability, Data & ML
 
-| UI | Best For |
-|----|----------|
-| **Streamlit** | Fastest to get running, great for prototyping |
-| **Gradio** | Demos and sharing with others |
-| **Next.js** | Production-grade, separate frontend/backend |
-| **CLI only** | No web UI, terminal interaction |
-
-### Authentication
-
-| Auth | Description |
-|------|-------------|
-| **None** | Open access (local dev) |
-| **Simple password** | Single shared password via env var |
-| **Multi-user** | Username + password pairs |
-| **OAuth / SSO** | Google, GitHub (Next.js only) |
-
-### Observability
-
-| Platform | Type |
-|----------|------|
-| **LangFuse** | Open-source tracing |
-| **LangSmith** | LangChain ecosystem |
-| **OpenTelemetry** | Vendor-neutral standard |
-| **None** | Add later |
-
-### Data & ML
-
-| Option | Choices |
-|--------|---------|
+| Dimension | Choices |
+|-----------|---------|
+| **UI** | Streamlit, Gradio, Next.js, CLI only |
+| **Auth** | none, simple password, multi-user, OAuth/SSO (Next.js) |
+| **Observability** | LangFuse, LangSmith, OpenTelemetry, none |
 | **Data format** | CSV/TSV, Parquet, JSON/JSONL, SQL |
-| **ML framework** | scikit-learn, PyTorch, XGBoost/LightGBM, HuggingFace Transformers |
-| **Notebooks** | Jupyter notebooks for EDA (yes/no) |
-| **Data layer** | Structured data processing (yes/no) |
-| **ML pipeline** | Model training & inference (yes/no) |
-
-### Additional Features
-
-| Feature | Description |
-|---------|-------------|
-| **RAG pipeline** | Document ingestion, chunking, retrieval |
-| **Guardrails** | Input/output safety, PII detection |
-| **Evaluation** | Test case framework for agent quality |
-| **MCP tools** | Model Context Protocol server integration |
-| **Docker** | Dockerfile + docker-compose for deployment |
+| **ML framework** | scikit-learn, PyTorch, XGBoost, HuggingFace Transformers |
+| **Extras** | RAG, guardrails, evaluation, MCP tools, notebooks, Docker |
 
 ---
 
 ## Generated Project Structure
 
-After running `launchpad init`, your project looks like this:
-
 ```
 my-ai-agent/
-├── agents/              # Agent orchestration (framework-specific)
+├── agents/              # Agent slices + framework orchestration + entrypoint
 ├── api/                 # FastAPI routes & Pydantic schemas
-├── auth/                # Authentication middleware
+├── auth/                # Authentication middleware (if enabled)
 ├── config/              # settings.py, application constants
-├── data/                # Raw, processed, and external data
-│   ├── documents/       # Documents for RAG ingestion
-│   ├── raw/             # Raw datasets
-│   ├── processed/       # Cleaned/transformed data
-│   └── external/        # External data sources
-├── data_processing/     # Data loading and transformation
-├── docs/                # Architecture documentation
-├── eval/                # Evaluation framework
-│   ├── datasets/        # Test case definitions (YAML)
-│   └── run_eval.py      # Evaluation runner
-├── guardrails/          # Input/output safety filters
-├── knowledge/           # RAG pipeline
-│   ├── ingestion/       # Document loaders and chunkers
-│   ├── vectorstore/     # Vector database client
-│   └── retrieval/       # Retriever implementation
+├── data/                # Documents, datasets
+├── docs/                # Architecture docs + Mermaid diagram
+├── eval/                # Evaluation framework (if enabled)
+├── guardrails/          # Input/output safety filters (if enabled)
+├── knowledge/           # Retrieval layer (custom or LlamaIndex)
 ├── memory/              # Conversation history management
-├── ml_models/           # ML training, inference, registry
-│   ├── training/        # Model training scripts
-│   ├── inference/       # Prediction serving
-│   ├── configs/         # Training configurations
-│   └── artifacts/       # Saved model checkpoints
+├── ml_models/           # ML training/inference (if enabled)
 ├── models/              # LLM & embedding provider abstractions
-│   ├── llm/             # LLM provider (OpenAI, Anthropic, etc.)
-│   └── embeddings/      # Embedding model provider
-├── notebooks/           # Jupyter notebooks for exploration
-├── observability/       # Tracing, cost tracking, dashboards
-├── prompts/             # System prompts, few-shot examples
+├── notebooks/           # Jupyter notebooks (if enabled)
+├── observability/       # Tracing + cost tracking (if enabled)
+├── prompts/             # Project-level prompts and few-shot examples
 ├── scripts/             # Utility scripts (ingestion, etc.)
-├── tests/               # Test suite
-├── tools/               # Tool registry and MCP servers
-├── ui/                  # Chat interface (Streamlit/Gradio/Next.js)
+├── tools/               # Shared tool registry and MCP servers
+├── ui/                  # Chat interface (if enabled)
 ├── .env.example         # Environment variable template
-├── .gitignore
-├── docker-compose.yml   # Container orchestration
-├── Dockerfile           # Application container
+├── docker-compose.yml   # Container orchestration (if enabled)
+├── Dockerfile
 ├── launchpad.yaml       # Project configuration (reproducible)
-├── README.md            # Auto-generated project README
-└── requirements.txt     # Python dependencies
+└── requirements.txt
 ```
 
-Only the layers you enable are generated — a minimal project (plain Python, no RAG, no UI) produces just the core agent, models, and API layers.
-
-**Salesforce AgentScript projects** additionally generate a Salesforce DX structure:
-
-```
-my-ai-agent/
-├── force-app/main/aiAuthoringBundles/  # AgentScript DSL files (.agent)
-├── sfdx-project.json                   # Salesforce DX project config
-├── agents/client.py                    # Python SDK client for Agentforce API
-└── ...                                 # Standard layers (API, config, etc.)
-```
-
----
-
-## Architecture
-
-Every generated project follows a layered architecture with clean separation of concerns:
-
-```
-┌─────────────────────────────────────────────┐
-│                  User Interface              │
-│          (Streamlit / Gradio / Next.js)       │
-├─────────────────────────────────────────────┤
-│              Authentication Layer            │
-├─────────────────────────────────────────────┤
-│               API Layer (FastAPI)             │
-├─────────────────────────────────────────────┤
-│                Agent Core                    │
-│  ┌──────────┐ ┌──────────┐ ┌──────────────┐ │
-│  │ Prompts  │ │Guardrails│ │   Memory     │ │
-│  └──────────┘ └──────────┘ └──────────────┘ │
-├────────────┬────────────┬───────────────────┤
-│   Tools    │ Knowledge  │    ML Pipeline    │
-│  Registry  │   (RAG)    │  Train/Inference  │
-├────────────┴────────────┴───────────────────┤
-│              Models Layer                    │
-│         (LLM + Embedding Providers)          │
-├─────────────────────────────────────────────┤
-│           Observability & Eval               │
-└─────────────────────────────────────────────┘
-```
-
-A Mermaid architecture diagram is auto-generated in each project's README, customized to your specific configuration choices.
+Only the layers you enable are generated. **AgentScript projects** additionally generate `force-app/main/aiAuthoringBundles/` (`.agent` DSL) and `sfdx-project.json`.
 
 ---
 
 ## Request Flow
 
-Here's how a typical request flows through a generated project:
+1. **User sends a message** through the UI or API
+2. **Authentication** validates the request (if enabled)
+3. **The uniform entrypoint** (`agents/__init__.py`) receives it
+4. **Input guardrails** check for prompt injection, PII, and abuse
+5. **The orchestrator** routes the request (framework + orchestration mode)
+6. **RAG retrieval** fetches context (if enabled)
+7. **LLM calls + tool execution** run inside each agent's loop
+8. **Output guardrails** validate and redact the response
+9. **Observability** records the trace
+10. **Response** returns to the user
 
-1. **User sends a message** through the UI (Streamlit, Gradio, Next.js, or CLI)
-2. **Authentication** validates the request (if auth is enabled)
-3. **FastAPI** receives the request and routes it to the agent
-4. **Input guardrails** check for safety (PII, injection, blocked topics)
-5. **Agent orchestrator** determines the plan (using the selected framework)
-6. **RAG retrieval** fetches relevant context from the vector store (if enabled)
-7. **Prompt assembly** combines system prompt, context, conversation history, and user query
-8. **LLM call** generates a response through the configured provider
-9. **Tool execution** handles any function calls the LLM requests
-10. **Output guardrails** validate the response (hallucination check, safety)
-11. **Observability** logs traces, tokens, and costs
-12. **Response** is returned to the user through the UI
+---
+
+## Architecture: Framework Adapters
+
+The CLI itself is built around a small plugin architecture:
+
+- `launchpadai/config.py` — `ProjectConfig` / `AgentSpec` (Pydantic v2): every option is validated before generation
+- `launchpadai/frameworks/` — one adapter module per framework, each exposing a frozen `FrameworkAdapter` and a `generate()` hook
+- `launchpadai/frameworks/registry.py` — the single registry; CLI choices and generation dispatch derive from it
+- `launchpadai/generators/` — framework-agnostic layer generators (API, guardrails, memory, knowledge, ...)
+
+Adding a framework = one adapter module + a registry entry + dependency mappings + tests. Core generators never branch on framework names.
 
 ---
 
@@ -341,52 +268,32 @@ Here's how a typical request flows through a generated project:
 ### Prerequisites
 
 - Python 3.10+
-- pip
+- [uv](https://docs.astral.sh/uv/) (recommended) or pip
 
 ### Setup
 
 ```bash
 git clone https://github.com/venkatviswa/launchpadai.git
 cd launchpadai
-pip install -e ".[dev]"
+uv sync                      # or: pip install -e ".[dev]"
 ```
 
 ### Running Tests
 
-The test suite includes 381+ tests across unit, integration, and validation layers:
-
 ```bash
-# Run all tests
-pytest tests/
-
-# Fast unit tests (~10s)
-pytest tests/unit/ -x
-
-# Validation tests — every generated file parses correctly
-pytest tests/validation/
-
-# Integration tests — edge cases and cross-generator consistency
-pytest tests/integration/
-
-# Run in parallel
-pytest tests/ -n auto
-
-# Run by marker
-pytest -m unit
-pytest -m validation
-pytest -m integration
+uv run pytest                          # fast tests (unit + integration + validation)
+uv run pytest tests/unit -x           # generator unit tests
+uv run pytest tests/smoke -m slow     # render → install → import smoke tests (slow)
 ```
 
-### Test Architecture
+| Layer | What It Validates |
+|-------|-------------------|
+| **Unit** | Each generator in isolation with parametrized configs |
+| **Integration** | Full project generation, edge cases, cross-generator consistency (pairwise via allpairspy) |
+| **Validation** | All generated `.py`, `.yaml`, `.json`, `.ipynb` files parse correctly |
+| **Smoke** | Each adapter's generated project installs its requirements and imports its entrypoint against real, current framework releases |
 
-| Layer | Tests | What It Validates |
-|-------|-------|-------------------|
-| **Unit** | ~244 | Each generator in isolation with parametrized configs |
-| **Integration** | ~28 | Full project generation, edge cases, cross-generator consistency |
-| **Validation** | ~82 | All generated `.py`, `.yaml`, `.json`, `.ipynb` files parse correctly |
-| **Pairwise** | ~39 | Combinatorial coverage of config interactions (allpairspy) |
-
-The pairwise suite uses [allpairspy](https://github.com/thombashi/allpairspy) to reduce ~12.9 million possible configuration combinations down to ~39 representative test cases that cover every two-way interaction between config options.
+CI runs the fast suite on every push, plus one smoke lane per framework adapter — an upstream breaking release fails only its adapter's lane.
 
 ---
 
@@ -394,37 +301,21 @@ The pairwise suite uses [allpairspy](https://github.com/thombashi/allpairspy) to
 
 **LaunchpadAI CLI:**
 - [Typer](https://typer.tiangolo.com/) — CLI framework
-- [Rich](https://rich.readthedocs.io/) — Terminal formatting and progress indicators
-- [Jinja2](https://jinja.palletsprojects.com/) — Template rendering
-- [PyYAML](https://pyyaml.org/) — Configuration parsing
+- [Rich](https://rich.readthedocs.io/) — terminal formatting and progress indicators
+- [Pydantic v2](https://docs.pydantic.dev/) — typed, validated configuration
+- [PyYAML](https://pyyaml.org/) — configuration persistence
 
 **Generated projects use (based on your selections):**
 - FastAPI, Pydantic (API layer)
-- LangChain/LangGraph, LlamaIndex, CrewAI, Haystack, Salesforce AgentScript (frameworks)
-- OpenAI, Anthropic, Google, Ollama SDKs (LLM providers)
-- ChromaDB, Pinecone, Weaviate, Qdrant, pgvector (vector stores)
+- LangGraph, CrewAI, Salesforce AgentScript (frameworks)
+- LlamaIndex (retrieval option)
+- OpenAI, Anthropic, Ollama SDKs (LLM providers)
+- ChromaDB, Pinecone (vector stores)
 - Streamlit, Gradio, Next.js (UIs)
 - Presidio (guardrails/PII detection)
 - LangFuse, LangSmith, OpenTelemetry (observability)
 - scikit-learn, PyTorch, XGBoost, HuggingFace Transformers (ML)
-- Jupyter, Pandas, NumPy (data science)
 - Docker, docker-compose (deployment)
-
----
-
-## Project Stats
-
-- **22 generator modules** producing different architectural layers
-- **6** agent framework options
-- **5** LLM providers
-- **7** embedding model options
-- **5** vector database options
-- **4** UI framework choices
-- **4** authentication levels
-- **3** observability platforms
-- **4** ML framework options
-- **~12.9 million** possible configuration combinations
-- **381+** automated tests
 
 ---
 

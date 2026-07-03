@@ -3,6 +3,7 @@ import pytest
 from pathlib import Path
 from allpairspy import AllPairs
 
+from launchpadai.config import AgentSpec, ProjectConfig
 from launchpadai.generators.project import ProjectGenerator
 
 
@@ -16,6 +17,7 @@ DEFAULT_CONFIG = {
     "llm_provider": "openai",
     "embedding_model": "openai-small",
     "vector_db": "chroma",
+    "retrieval": "custom",
     "include_rag": True,
     "include_guardrails": False,
     "include_eval": False,
@@ -30,16 +32,23 @@ DEFAULT_CONFIG = {
     "ml_framework": "sklearn",
     "include_docker": False,
     "agent_description": "A test AI assistant",
+    "orchestration": "single",
 }
+
+MULTI_AGENT_SPECS = [
+    {"name": "researcher", "role": "Research Analyst", "goal": "Find accurate information"},
+    {"name": "writer", "role": "Response Writer", "goal": "Write clear answers"},
+]
 
 
 @pytest.fixture
 def make_config():
-    """Factory that produces valid config dicts with overrides.
+    """Factory that produces validated ProjectConfig objects with overrides.
 
     Applies the same conditional fallbacks as the real CLI:
     - auth → "none" when ui is "none"
     - auth "oauth" → "multi_user" when ui is not "nextjs"
+    - multi-agent orchestration without explicit agents → two default agents
     """
     def _make(**overrides):
         config = {**DEFAULT_CONFIG, **overrides}
@@ -47,7 +56,9 @@ def make_config():
             config["auth"] = "none"
         if config["auth"] == "oauth" and config["ui"] != "nextjs":
             config["auth"] = "multi_user"
-        return config
+        if config.get("orchestration") in ("sequential", "supervisor") and not config.get("agents"):
+            config["agents"] = MULTI_AGENT_SPECS
+        return ProjectConfig.model_validate(config)
     return _make
 
 
@@ -77,6 +88,8 @@ _PAIRWISE_KEYS = [
     "llm_provider",
     "embedding_model",
     "vector_db",
+    "retrieval",
+    "orchestration",
     "include_rag",
     "include_guardrails",
     "include_eval",
@@ -93,10 +106,12 @@ _PAIRWISE_KEYS = [
 ]
 
 _PAIRWISE_PARAMETERS = [
-    ["plain", "langchain", "llamaindex", "crewai", "haystack", "agentscript"],
-    ["openai", "anthropic", "google", "ollama", "multiple"],
-    ["openai-small", "openai-large", "cohere", "bge-m3", "gte-qwen2", "nomic", "ollama"],
-    ["chroma", "pinecone", "weaviate", "qdrant", "pgvector"],
+    ["plain", "langgraph", "crewai", "agentscript"],
+    ["openai", "anthropic", "ollama"],
+    ["openai-small", "openai-large", "bge-m3", "gte-qwen2", "nomic"],
+    ["chroma", "pinecone"],
+    ["custom", "llamaindex"],
+    ["single", "sequential", "supervisor"],
     [True, False],   # include_rag
     [True, False],   # include_guardrails
     [True, False],   # include_eval
@@ -112,39 +127,49 @@ _PAIRWISE_PARAMETERS = [
     [True, False],   # include_docker
 ]
 
+_KEY_INDEX = {key: i for i, key in enumerate(_PAIRWISE_KEYS)}
+
 
 def _is_valid_pairwise(row):
     """Constraint filter for conditional config dependencies."""
-    if len(row) > 10:
-        ui, auth = row[9], row[10]
+    def val(key):
+        idx = _KEY_INDEX[key]
+        return row[idx] if len(row) > idx else None
+
+    framework, orchestration = val("framework"), val("orchestration")
+    if framework == "agentscript" and orchestration not in (None, "single"):
+        return False
+    ui, auth = val("ui"), val("auth")
+    if ui is not None and auth is not None:
         if ui == "none" and auth != "none":
             return False
         if auth == "oauth" and ui != "nextjs":
             return False
-    if len(row) > 12:
-        notebooks, data_layer = row[11], row[12]
-        if not notebooks and data_layer:
-            return False
-    if len(row) > 13:
-        data_layer, data_format = row[12], row[13]
-        if not data_layer and data_format != "csv":
-            return False
-    if len(row) > 15:
-        ml_pipeline, ml_framework = row[14], row[15]
-        if not ml_pipeline and ml_framework != "sklearn":
-            return False
+    notebooks, data_layer = val("include_notebooks"), val("include_data_layer")
+    if notebooks is not None and data_layer is not None and not notebooks and data_layer:
+        return False
+    data_format = val("data_format")
+    if data_layer is not None and data_format is not None and not data_layer and data_format != "csv":
+        return False
+    ml_pipeline, ml_framework = val("include_ml_pipeline"), val("ml_framework")
+    if ml_pipeline is not None and ml_framework is not None and not ml_pipeline and ml_framework != "sklearn":
+        return False
     return True
 
 
 def _generate_pairwise_configs():
-    """Generate pairwise test configurations."""
+    """Generate pairwise test configurations as validated ProjectConfig objects."""
     configs = []
     for i, row in enumerate(AllPairs(_PAIRWISE_PARAMETERS, filter_func=_is_valid_pairwise)):
         config = {**DEFAULT_CONFIG}
         for key, value in zip(_PAIRWISE_KEYS, row):
             config[key] = value
         config["project_name"] = f"pw-project-{i}"
-        configs.append(config)
+        if config["ui"] == "none":
+            config["auth"] = "none"
+        if config["orchestration"] in ("sequential", "supervisor"):
+            config["agents"] = MULTI_AGENT_SPECS
+        configs.append(ProjectConfig.model_validate(config))
     return configs
 
 

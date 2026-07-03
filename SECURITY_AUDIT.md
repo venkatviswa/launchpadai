@@ -11,7 +11,7 @@
 LaunchpadAI is a CLI scaffolding tool that generates production-ready agentic AI applications. This audit reviews both the tool itself and the **generated code templates** it produces, since vulnerabilities in templates propagate to every generated project.
 
 **Findings:** 14 security issues identified (2 Critical, 3 High, 7 Medium, 2 Low).
-**Fixes Applied:** 8 issues fixed in this audit. Remaining items documented as recommendations.
+**Fixes Applied:** 11 issues fixed in this audit (see summary table). Remaining items documented as recommendations.
 
 ---
 
