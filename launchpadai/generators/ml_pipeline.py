@@ -485,7 +485,7 @@ def train(config_path: str = "ml_models/configs/training_config.yaml"):
         "colsample_bytree": [0.8, 1.0],
     }
 
-    model = xgb.XGBClassifier(random_state=seed, eval_metric="logloss", use_label_encoder=False)
+    model = xgb.XGBClassifier(random_state=seed, eval_metric="logloss")
 
     print("Running grid search...")
     grid = GridSearchCV(
@@ -572,7 +572,7 @@ def train(config_path: str = "ml_models/configs/training_config.yaml"):
         num_train_epochs=config["training"]["epochs"],
         per_device_train_batch_size=config["training"]["batch_size"],
         learning_rate=config["training"]["learning_rate"],
-        evaluation_strategy="epoch",
+        eval_strategy="epoch",
         save_strategy="epoch",
         load_best_model_at_end=True,
         seed=seed,

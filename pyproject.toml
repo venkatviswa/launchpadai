@@ -27,7 +27,7 @@ classifiers = [
 dependencies = [
     "typer>=0.9.0",
     "rich>=13.0.0",
-    "jinja2>=3.1.0",
+    "pydantic>=2.7.0",
     "pyyaml>=6.0",
 ]
 
@@ -35,11 +35,17 @@ dependencies = [
 launchpad = "launchpadai.cli.main:app"
 
 [project.urls]
-Homepage = "https://github.com/launchpadai/launchpadai"
-Documentation = "https://launchpadai.dev"
-Repository = "https://github.com/launchpadai/launchpadai"
+Homepage = "https://github.com/venkatviswa/launchpadai"
+Repository = "https://github.com/venkatviswa/launchpadai"
 
 [project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-xdist>=3.5.0",
+    "allpairspy>=2.5.0",
+]
+
+[dependency-groups]
 dev = [
     "pytest>=8.0.0",
     "pytest-xdist>=3.5.0",
@@ -52,12 +58,10 @@ markers = [
     "unit: Unit tests for individual generators",
     "integration: Full project generation tests",
     "validation: Output file validation tests",
-    "slow: Tests that take > 10 seconds",
+    "slow: Tests that take > 10 seconds (render → install → import smoke tests)",
 ]
-addopts = "-v --tb=short"
+# Slow smoke tests are opt-in: run them with `pytest tests/smoke -m slow`
+addopts = "-v --tb=short -m 'not slow'"
 
 [tool.setuptools.packages.find]
 include = ["launchpadai*"]
-
-[tool.setuptools.package-data]
-launchpadai = ["templates/**/*"]

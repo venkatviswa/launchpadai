@@ -47,7 +47,7 @@ def load_test_cases(path: str = "eval/datasets/test_cases.yaml") -> list[dict]:
 
 def run_evaluation():
     """Run all test cases and report results."""
-    from agents.base import agent
+    from agents import agent
 
     cases = load_test_cases()
     results = []

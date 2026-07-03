@@ -66,28 +66,83 @@ llm = LLMProvider()
 '''
 
     elif provider == "anthropic":
-        return header + '''import anthropic
+        return header + '''import json
+
+import anthropic
 
 
 class LLMProvider:
-    """Anthropic Claude LLM provider."""
+    """Anthropic Claude LLM provider.
+
+    Accepts OpenAI-style message lists and tool schemas and adapts them to
+    the Anthropic Messages API, so agent code stays provider-agnostic.
+    """
 
     def __init__(self):
         self.client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         self.model = settings.LLM_MODEL
 
-    def chat(self, messages: list[dict], system: str = None, tools: list[dict] = None, **kwargs) -> dict:
-        """Send a message to Claude."""
+    def _convert_messages(self, messages: list[dict]) -> tuple[str, list[dict]]:
+        """Split out system text and convert OpenAI-style turns to Anthropic format."""
+        system_parts = []
+        converted = []
+        for m in messages:
+            role = m["role"]
+            if role == "system":
+                system_parts.append(m["content"])
+            elif role == "assistant" and m.get("tool_calls"):
+                blocks = []
+                if m.get("content"):
+                    blocks.append({"type": "text", "text": m["content"]})
+                for tc in m["tool_calls"]:
+                    args = tc["function"]["arguments"]
+                    blocks.append({
+                        "type": "tool_use",
+                        "id": tc["id"],
+                        "name": tc["function"]["name"],
+                        "input": json.loads(args) if isinstance(args, str) else args,
+                    })
+                converted.append({"role": "assistant", "content": blocks})
+            elif role == "tool":
+                converted.append({
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": m.get("tool_call_id", ""),
+                        "content": m.get("content", ""),
+                    }],
+                })
+            else:
+                converted.append({"role": role, "content": m["content"]})
+        return "\\n\\n".join(system_parts), converted
+
+    def _convert_tools(self, tools: list[dict]) -> list[dict]:
+        """Convert OpenAI function-tool schemas to Anthropic tool schemas."""
+        return [
+            {
+                "name": t["function"]["name"],
+                "description": t["function"].get("description", ""),
+                "input_schema": t["function"].get(
+                    "parameters", {"type": "object", "properties": {}}
+                ),
+            }
+            for t in tools
+        ]
+
+    def chat(self, messages: list[dict], tools: list[dict] = None, **kwargs) -> dict:
+        """Send a message to Claude (accepts OpenAI-style messages/tools)."""
+        system, converted = self._convert_messages(messages)
         params = {
             "model": self.model,
             "max_tokens": kwargs.pop("max_tokens", 4096),
-            "messages": messages,
+            "temperature": kwargs.pop("temperature", settings.LLM_TEMPERATURE),
+            "messages": converted,
             **kwargs,
         }
         if system:
             params["system"] = system
         if tools:
-            params["tools"] = tools
+            params["tools"] = self._convert_tools(tools)
 
         response = self.client.messages.create(**params)
         return response

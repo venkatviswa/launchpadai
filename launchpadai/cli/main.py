@@ -9,6 +9,8 @@ import subprocess
 import sys
 
 from launchpadai.cli.prompts import gather_project_config
+from launchpadai.config import AgentSpec, ProjectConfig
+from launchpadai.frameworks.registry import framework_names, validate_config
 from launchpadai.generators.project import ProjectGenerator
 
 app = typer.Typer(
@@ -30,27 +32,96 @@ BANNER = r"""
 """
 
 
+def _parse_agent_specs(specs: list[str]) -> list[AgentSpec]:
+    """Parse repeatable --agent flags of the form "name:role:goal"."""
+    agents = []
+    for raw in specs:
+        parts = [p.strip() for p in raw.split(":", 2)]
+        name = parts[0].lower().replace("-", "_").replace(" ", "_")
+        role = parts[1] if len(parts) > 1 and parts[1] else name.replace("_", " ").title()
+        goal = parts[2] if len(parts) > 2 and parts[2] else f"Handle {role.lower()} work"
+        agents.append(AgentSpec(name=name, role=role, goal=goal))
+    return agents
+
+
 @app.command()
 def init(
     project_name: str = typer.Argument(None, help="Name of the project to create"),
     output_dir: str = typer.Option(".", "--output", "-o", help="Output directory"),
+    framework: str = typer.Option(None, "--framework", "-f", help=f"Agent framework: {', '.join(framework_names())}"),
+    llm: str = typer.Option(None, "--llm", help="LLM provider: openai, anthropic, ollama"),
+    embedding: str = typer.Option(None, "--embedding", help="Embedding model: openai-small, openai-large, bge-m3, gte-qwen2, nomic"),
+    vector_db: str = typer.Option(None, "--vector-db", help="Vector database: chroma, pinecone"),
+    retrieval: str = typer.Option(None, "--retrieval", help="Retrieval layer: custom, llamaindex"),
+    rag: bool = typer.Option(None, "--rag/--no-rag", help="Include RAG pipeline"),
+    guardrails: bool = typer.Option(None, "--guardrails/--no-guardrails", help="Include input/output guardrails"),
+    include_eval: bool = typer.Option(None, "--eval/--no-eval", help="Include evaluation framework"),
+    mcp: bool = typer.Option(None, "--mcp/--no-mcp", help="Include MCP tool integration"),
+    observability: str = typer.Option(None, "--observability", help="Observability: langfuse, langsmith, opentelemetry, none"),
+    ui: str = typer.Option(None, "--ui", help="Test UI: streamlit, gradio, nextjs, none"),
+    auth: str = typer.Option(None, "--auth", help="UI authentication: none, simple, multi_user, oauth"),
+    notebooks: bool = typer.Option(None, "--notebooks/--no-notebooks", help="Include Jupyter notebooks"),
+    data_layer: bool = typer.Option(None, "--data-layer/--no-data-layer", help="Include structured data layer"),
+    data_format: str = typer.Option(None, "--data-format", help="Data format: csv, parquet, json, sql"),
+    ml: bool = typer.Option(None, "--ml/--no-ml", help="Include ML training/inference pipeline"),
+    ml_framework: str = typer.Option(None, "--ml-framework", help="ML framework: sklearn, pytorch, xgboost, transformers"),
+    docker: bool = typer.Option(None, "--docker/--no-docker", help="Include Docker setup"),
+    description: str = typer.Option(None, "--description", "-d", help="One-line agent description"),
+    agent: list[str] = typer.Option(None, "--agent", help='Agent spec "name:role:goal" (repeat for multi-agent)'),
+    orchestration: str = typer.Option(None, "--orchestration", help="Multi-agent orchestration: single, sequential, supervisor"),
+    defaults: bool = typer.Option(False, "--defaults", "-y", help="Non-interactive: use defaults for anything not passed as a flag"),
+    force: bool = typer.Option(False, "--force", help="Overwrite an existing directory without prompting"),
 ):
-    """Create a new agentic AI project with interactive setup."""
+    """Create a new agentic AI project (interactive wizard, or fully via flags)."""
+    overrides = {
+        "framework": framework,
+        "llm_provider": llm,
+        "embedding_model": embedding,
+        "vector_db": vector_db,
+        "retrieval": retrieval,
+        "include_rag": rag,
+        "include_guardrails": guardrails,
+        "include_eval": include_eval,
+        "include_mcp": mcp,
+        "observability": observability,
+        "ui": ui,
+        "auth": auth,
+        "include_notebooks": notebooks,
+        "include_data_layer": data_layer,
+        "data_format": data_format,
+        "include_ml_pipeline": ml,
+        "ml_framework": ml_framework,
+        "include_docker": docker,
+        "agent_description": description,
+        "orchestration": orchestration,
+    }
+    overrides = {k: v for k, v in overrides.items() if v is not None}
+    if agent:
+        overrides["agents"] = _parse_agent_specs(agent)
+
+    non_interactive = defaults or bool(overrides)
+
     console.print(Panel(BANNER, style="bold cyan", expand=False))
     console.print()
 
-    # If project name not provided as argument, ask for it
+    # If project name not provided as argument, ask for it (or default it)
     if not project_name:
-        project_name = Prompt.ask(
-            "[bold green]? Project name[/]",
-            default="my-ai-agent",
-        )
+        if non_interactive:
+            project_name = "my-ai-agent"
+        else:
+            project_name = Prompt.ask(
+                "[bold green]? Project name[/]",
+                default="my-ai-agent",
+            )
 
     # Validate project name
     project_name = project_name.strip().replace(" ", "-").lower()
     project_path = Path(output_dir) / project_name
 
-    if project_path.exists():
+    if project_path.exists() and not force:
+        if non_interactive:
+            console.print(f"[red]Directory '{project_name}' already exists. Use --force to overwrite.[/]")
+            raise typer.Exit(1)
         overwrite = Confirm.ask(
             f"[yellow]Directory '{project_name}' already exists. Overwrite?[/]",
             default=False,
@@ -59,21 +130,33 @@ def init(
             console.print("[red]Aborted.[/]")
             raise typer.Exit(1)
 
-    console.print()
-    console.print("[bold]Let's configure your AI agent project![/]")
-    console.print("[dim]Use arrow keys to select, Enter to confirm[/]")
-    console.print()
+    if non_interactive:
+        try:
+            config = ProjectConfig(project_name=project_name, **overrides)
+            validate_config(config)
+        except (ValueError, KeyError) as e:
+            console.print(f"[red]Invalid configuration:[/] {e}")
+            raise typer.Exit(1)
+        _show_summary(config)
+    else:
+        console.print()
+        console.print("[bold]Let's configure your AI agent project![/]")
+        console.print()
 
-    # Gather all configuration via interactive prompts
-    config = gather_project_config(project_name)
+        # Gather all configuration via interactive prompts
+        config = gather_project_config(project_name)
+        try:
+            validate_config(config)
+        except (ValueError, KeyError) as e:
+            console.print(f"[red]Invalid configuration:[/] {e}")
+            raise typer.Exit(1)
 
-    # Show summary
-    _show_summary(config)
+        _show_summary(config)
 
-    proceed = Confirm.ask("\n[bold green]? Generate project with this configuration?[/]", default=True)
-    if not proceed:
-        console.print("[red]Aborted.[/]")
-        raise typer.Exit(1)
+        proceed = Confirm.ask("\n[bold green]? Generate project with this configuration?[/]", default=True)
+        if not proceed:
+            console.print("[red]Aborted.[/]")
+            raise typer.Exit(1)
 
     # Generate the project
     console.print()
@@ -181,18 +264,22 @@ def evaluate(
     )
 
 
-def _show_summary(config: dict):
+def _show_summary(config):
     """Display a summary table of selected configuration."""
     table = Table(title="Project Configuration", show_header=True, header_style="bold cyan")
     table.add_column("Setting", style="bold")
     table.add_column("Value", style="green")
 
+    agents_desc = ", ".join(a.name for a in config["agents"])
     table.add_row("Project Name", config["project_name"])
     table.add_row("Framework", config["framework"])
+    table.add_row("Agents", f"{agents_desc} ({config['orchestration']})")
     table.add_row("LLM Provider", config["llm_provider"])
-    table.add_row("Embedding Model", config["embedding_model"])
-    table.add_row("Vector Database", config["vector_db"])
     table.add_row("RAG Pipeline", "Yes" if config["include_rag"] else "No")
+    if config["include_rag"]:
+        table.add_row("Retrieval Layer", config["retrieval"])
+        table.add_row("Embedding Model", config["embedding_model"])
+        table.add_row("Vector Database", config["vector_db"])
     table.add_row("Guardrails", "Yes" if config["include_guardrails"] else "No")
     table.add_row("Eval Framework", "Yes" if config["include_eval"] else "No")
     table.add_row("Observability", config["observability"])

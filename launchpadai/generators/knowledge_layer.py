@@ -9,9 +9,16 @@ def generate_knowledge_layer(config: dict, project_path: Path):
 
     base = project_path / "knowledge"
     _write(base / "__init__.py", "")
+    _write(base / "retrieval" / "__init__.py", "")
+
+    # LlamaIndex retrieval option: LlamaIndex owns loading, chunking, and
+    # indexing; only the retriever module is generated.
+    if config.get("retrieval") == "llamaindex":
+        _write(base / "retrieval" / "retriever.py", _llamaindex_retriever(config))
+        return
+
     _write(base / "ingestion" / "__init__.py", "")
     _write(base / "vectorstore" / "__init__.py", "")
-    _write(base / "retrieval" / "__init__.py", "")
 
     # Chunker
     _write(base / "ingestion" / "chunkers.py", '''"""Document chunking strategies.
@@ -153,13 +160,10 @@ class Retriever:
         self.top_k = top_k or settings.TOP_K_RESULTS
 
     def retrieve(self, query: str) -> list[dict]:
-        """Embed the query and search for similar documents."""
-        query_embedding = embeddings.embed(query)
-        results = vectorstore.search(query_embedding, top_k=self.top_k)
-        return results
+        """Embed the query and search for similar documents.
 
-    def retrieve_with_scores(self, query: str) -> list[dict]:
-        """Retrieve documents with similarity scores."""
+        Results include the store's similarity score/distance where available.
+        """
         query_embedding = embeddings.embed(query)
         results = vectorstore.search(query_embedding, top_k=self.top_k)
         return results
@@ -278,31 +282,109 @@ vectorstore = VectorStore()
 '''
 
     else:
-        return f'''"""Vector store client — {vdb}.
+        raise ValueError(f"Unsupported vector_db: {vdb}")
 
-TODO: Configure your vector store connection.
-See config/settings.py for connection details.
+
+def _llamaindex_retriever(config: dict) -> str:
+    """Generate a LlamaIndex-backed retriever with the same interface as the custom one."""
+    embedding = config["embedding_model"]
+    if embedding.startswith("openai"):
+        model_name = "text-embedding-3-small" if embedding == "openai-small" else "text-embedding-3-large"
+        embed_import = "from llama_index.embeddings.openai import OpenAIEmbedding"
+        embed_expr = f'OpenAIEmbedding(model="{model_name}")'
+    else:
+        hf_models = {
+            "bge-m3": "BAAI/bge-m3",
+            "gte-qwen2": "Alibaba-NLP/gte-Qwen2-1.5B-instruct",
+            "nomic": "nomic-ai/nomic-embed-text-v1.5",
+        }
+        embed_import = "from llama_index.embeddings.huggingface import HuggingFaceEmbedding"
+        embed_expr = f'HuggingFaceEmbedding(model_name="{hf_models[embedding]}")'
+
+    return f'''"""Retrieval logic — LlamaIndex-backed retriever.
+
+Same interface as the custom retriever (retrieve / format_context), so agent
+code doesn't care which retrieval option was selected. The index is built
+from data/documents/ on first use and persisted to data/llamaindex/.
+Rebuild it after adding documents: python scripts/ingest.py
 """
+from pathlib import Path
+
+from config.settings import settings
+
+PERSIST_DIR = Path("data/llamaindex")
+DOCUMENTS_DIR = Path("data/documents")
 
 
-class VectorStore:
-    """Vector store client for {vdb}."""
+class Retriever:
+    """Search a LlamaIndex vector index for relevant documents."""
 
-    def __init__(self):
-        # TODO: Initialize your vector store client
-        pass
+    def __init__(self, top_k: int = None):
+        self.top_k = top_k or settings.TOP_K_RESULTS
+        self._retriever = None
 
-    def add(self, texts: list[str], embeddings: list[list[float]], metadatas: list[dict] = None, ids: list[str] = None):
-        """Add documents to the store."""
-        raise NotImplementedError("Configure your vector store in knowledge/vectorstore/client.py")
+    def _ensure_index(self, rebuild: bool = False):
+        if self._retriever is not None and not rebuild:
+            return
 
-    def search(self, query_embedding: list[float], top_k: int = 5) -> list[dict]:
-        """Search for similar documents."""
-        raise NotImplementedError("Configure your vector store in knowledge/vectorstore/client.py")
+        from llama_index.core import (
+            Settings,
+            SimpleDirectoryReader,
+            StorageContext,
+            VectorStoreIndex,
+            load_index_from_storage,
+        )
+        {embed_import}
+
+        Settings.embed_model = {embed_expr}
+
+        if PERSIST_DIR.exists() and not rebuild:
+            storage = StorageContext.from_defaults(persist_dir=str(PERSIST_DIR))
+            index = load_index_from_storage(storage)
+        else:
+            if not DOCUMENTS_DIR.exists() or not any(DOCUMENTS_DIR.iterdir()):
+                raise FileNotFoundError(
+                    f"No documents found in {{DOCUMENTS_DIR}}. "
+                    "Add files there, then run: python scripts/ingest.py"
+                )
+            documents = SimpleDirectoryReader(str(DOCUMENTS_DIR)).load_data()
+            index = VectorStoreIndex.from_documents(documents)
+            index.storage_context.persist(persist_dir=str(PERSIST_DIR))
+
+        self._retriever = index.as_retriever(similarity_top_k=self.top_k)
+
+    def rebuild(self):
+        """Re-index data/documents/ (used by scripts/ingest.py)."""
+        self._ensure_index(rebuild=True)
+
+    def retrieve(self, query: str) -> list[dict]:
+        """Search the index for chunks relevant to the query."""
+        self._ensure_index()
+        nodes = self._retriever.retrieve(query)
+        return [
+            {{
+                "text": node.get_content(),
+                "metadata": node.metadata or {{}},
+                "score": node.score,
+            }}
+            for node in nodes
+        ]
+
+    def format_context(self, results: list[dict]) -> str:
+        """Format retrieved documents into a context string for the LLM."""
+        if not results:
+            return "No relevant documents found."
+
+        context_parts = []
+        for i, doc in enumerate(results, 1):
+            source = doc.get("metadata", {{}}).get("file_name", "Unknown")
+            context_parts.append(f"[Document {{i}} — {{source}}]\\n{{doc.get('text', '')}}")
+
+        return "\\n\\n".join(context_parts)
 
 
 # Singleton
-vectorstore = VectorStore()
+retriever = Retriever()
 '''
 
 

@@ -74,19 +74,21 @@ def build_messages(
     user_message: str,
     context: str = "",
     system_prompt_name: str = "default",
+    system_prompt: str = None,
     include_few_shot: bool = True,
     conversation_history: list[dict] = None,
 ) -> list[dict]:
     """Build the complete message list for the LLM.
 
     This assembles:
-    1. System prompt (with context injected)
+    1. System prompt (pass `system_prompt` text directly, e.g. from an
+       agent slice, or a `system_prompt_name` to load from prompts/system/)
     2. Few-shot examples (optional)
     3. Conversation history (optional)
     4. Current user message
     """
     # Load and fill system prompt
-    system = load_system_prompt(system_prompt_name)
+    system = system_prompt if system_prompt is not None else load_system_prompt(system_prompt_name)
     system = system.replace("{{context}}", context or "No context provided.")
 
     messages = [{"role": "system", "content": system}]

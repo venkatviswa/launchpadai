@@ -12,29 +12,22 @@ Generates:
 DISPLAY_NAMES = {
     # Frameworks
     "plain": "Plain Python",
-    "langchain": "LangChain / LangGraph",
-    "llamaindex": "LlamaIndex",
+    "langgraph": "LangGraph",
     "crewai": "CrewAI",
-    "haystack": "Haystack",
+    "agentscript": "Salesforce AgentScript",
     # LLM providers
     "openai": "OpenAI GPT-4o",
     "anthropic": "Anthropic Claude",
-    "google": "Google Gemini",
     "ollama": "Ollama (Local)",
-    "multiple": "Multiple LLMs",
     # Embeddings
     "openai-small": "OpenAI text-embedding-3-small",
     "openai-large": "OpenAI text-embedding-3-large",
-    "cohere": "Cohere embed-v4",
     "bge-m3": "BGE-M3 (Local)",
     "gte-qwen2": "GTE-Qwen2 (Local)",
     "nomic": "Nomic v1.5 (Local)",
     # Vector DBs
     "chroma": "ChromaDB",
     "pinecone": "Pinecone",
-    "weaviate": "Weaviate",
-    "qdrant": "Qdrant",
-    "pgvector": "pgvector (PostgreSQL)",
     # Observability
     "langfuse": "LangFuse",
     "langsmith": "LangSmith",
@@ -105,8 +98,17 @@ def generate_architecture_diagram(config: dict) -> str:
     lines.append("")
 
     # ── Subgraph: Agent Core ──────────────────────────────────
+    agents = config.get("agents") or []
+    orchestration = config.get("orchestration", "single")
+    if len(agents) > 1:
+        agent_label = f"{orchestration} · {len(agents)} agents"
+    else:
+        agent_label = "single agent"
     lines.append("    subgraph AGENT_CORE[\"🧠 Agent Core\"]")
-    lines.append(f'        API --> ORCHESTRATOR["🔄 Orchestrator<br/>{framework}"]')
+    lines.append(f'        API --> ORCHESTRATOR["🔄 Orchestrator<br/>{framework} · {agent_label}"]')
+    for spec in agents[:6]:
+        node = spec.name.upper()
+        lines.append(f'        ORCHESTRATOR --> AGENT_{node}["🤖 {spec.name}<br/>{spec.role}"]')
 
     if has_guardrails:
         lines.append('        ORCHESTRATOR --> INPUT_GUARD["🛡️ Input<br/>Guardrails"]')

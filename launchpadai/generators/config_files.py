@@ -5,27 +5,20 @@ from pathlib import Path
 ENV_VARS = {
     "openai": 'OPENAI_API_KEY=your-key-here',
     "anthropic": 'ANTHROPIC_API_KEY=your-key-here',
-    "google": 'GOOGLE_API_KEY=your-key-here',
     "ollama": 'OLLAMA_BASE_URL=http://localhost:11434',
-    "multiple": 'OPENAI_API_KEY=your-key-here\nANTHROPIC_API_KEY=your-key-here',
 }
 
 VECTORDB_ENV = {
     "chroma": '# ChromaDB — local by default, no key needed\nCHROMA_PERSIST_DIR=./data/chroma',
     "pinecone": 'PINECONE_API_KEY=your-key-here\nPINECONE_INDEX=your-index-name',
-    "weaviate": 'WEAVIATE_URL=http://localhost:8080\nWEAVIATE_API_KEY=your-key-here',
-    "qdrant": 'QDRANT_URL=http://localhost:6333\nQDRANT_API_KEY=your-key-here',
-    "pgvector": 'POSTGRES_URL=postgresql://user:pass@localhost:5432/vectors',
 }
 
 EMBEDDING_ENV = {
     "openai-small": "",
     "openai-large": "",
-    "cohere": "COHERE_API_KEY=your-key-here",
     "bge-m3": "# BGE-M3 runs locally — no API key needed",
     "gte-qwen2": "# GTE-Qwen2 runs locally — no API key needed",
     "nomic": "# Nomic runs locally — no API key needed",
-    "ollama": "# Ollama embeddings — uses OLLAMA_BASE_URL above",
 }
 
 OBS_ENV = {
@@ -94,23 +87,18 @@ class Settings:
 
     if config["llm_provider"] == "openai":
         settings += '''    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    LLM_MODEL = "gpt-4o"
-    LLM_TEMPERATURE = 0.7
+    LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
+    LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
 '''
     elif config["llm_provider"] == "anthropic":
         settings += '''    ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-    LLM_MODEL = "claude-sonnet-4-20250514"
-    LLM_TEMPERATURE = 0.7
-'''
-    elif config["llm_provider"] == "google":
-        settings += '''    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-    LLM_MODEL = "gemini-1.5-pro"
-    LLM_TEMPERATURE = 0.7
+    LLM_MODEL = os.getenv("LLM_MODEL", "claude-sonnet-4-20250514")
+    LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
 '''
     elif config["llm_provider"] == "ollama":
         settings += '''    OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    LLM_MODEL = "llama3.1"
-    LLM_TEMPERATURE = 0.7
+    LLM_MODEL = os.getenv("LLM_MODEL", "llama3.1")
+    LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
 '''
 
     settings += f'''
@@ -175,7 +163,9 @@ node_modules/
         structure_lines.append("├── knowledge/       # RAG pipeline (ingestion, retrieval)")
     structure_lines.append("├── prompts/         # System prompts and templates")
     structure_lines.append("├── tools/           # External tool integrations")
-    structure_lines.append("├── agents/          # Core agent logic and orchestration")
+    structure_lines.append("├── agents/          # Agent slices (one per agent) + orchestration")
+    for spec in config["agents"]:
+        structure_lines.append(f"│   ├── {spec.name}/  # prompts/system.md, tools.py")
     if config.get("include_guardrails"):
         structure_lines.append("├── guardrails/      # Input/output safety filters")
     structure_lines.append("├── memory/          # Conversation and state management")

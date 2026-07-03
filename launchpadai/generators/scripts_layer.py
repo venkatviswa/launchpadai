@@ -12,6 +12,29 @@ print("RAG not enabled. Re-create project with RAG support to use ingestion.")
 ''')
         return
 
+    if config.get("retrieval") == "llamaindex":
+        _write(project_path / "scripts" / "ingest.py", '''"""Document ingestion script — (re)build the LlamaIndex index.
+
+Usage:
+    python scripts/ingest.py
+    launchpad ingest
+"""
+import sys
+from pathlib import Path
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from knowledge.retrieval.retriever import retriever
+
+
+if __name__ == "__main__":
+    print("Indexing data/documents/ with LlamaIndex...")
+    retriever.rebuild()
+    print("Done. Index persisted to data/llamaindex/.")
+''')
+        return
+
     _write(project_path / "scripts" / "ingest.py", '''"""Document ingestion script — load documents into the vector store.
 
 Usage:

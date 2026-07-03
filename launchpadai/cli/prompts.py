@@ -1,6 +1,11 @@
 """Interactive prompts for gathering project configuration."""
+import re
+
 from rich.console import Console
-from rich.prompt import Prompt, Confirm
+from rich.prompt import Confirm, Prompt
+
+from launchpadai.config import AgentSpec, ProjectConfig
+from launchpadai.frameworks.registry import ADAPTERS
 
 console = Console()
 
@@ -25,124 +30,165 @@ def _select(question: str, options: list[str], default: str = None) -> str:
         console.print(f"  [red]Please enter a number between 1 and {len(options)}[/]")
 
 
-def _multi_select(question: str, options: list[str]) -> list[str]:
-    """Display options and allow multiple selections."""
-    console.print(f"[bold green]? {question}[/] [dim](comma-separated numbers)[/]")
-    for i, opt in enumerate(options, 1):
-        console.print(f"    [bold]{i}[/]) {opt}")
+def _slugify(text: str) -> str:
+    slug = re.sub(r"[^a-z0-9_]+", "_", text.strip().lower()).strip("_")
+    return slug or "agent"
 
+
+def _gather_agents(orchestrations: tuple[str, ...], agent_description: str) -> tuple[list[AgentSpec], str]:
+    """Ask for the agent team layout and return (agents, orchestration)."""
+    multi_supported = len(orchestrations) > 1
+    if not multi_supported:
+        console.print("[dim]This framework supports a single agent per project.[/]")
+        console.print()
+        return (
+            [AgentSpec(name="assistant", role="Assistant", goal=agent_description)],
+            "single",
+        )
+
+    team_options = ["Single agent"]
+    if "sequential" in orchestrations:
+        team_options.append("Multi-agent pipeline (agents run in order)")
+    if "supervisor" in orchestrations:
+        team_options.append("Multi-agent with supervisor routing")
+
+    team = _select("Agent team", team_options, default="Single agent")
+    if team == "Single agent":
+        return (
+            [AgentSpec(name="assistant", role="Assistant", goal=agent_description)],
+            "single",
+        )
+
+    orchestration = "sequential" if "pipeline" in team else "supervisor"
+
+    agents: list[AgentSpec] = []
+    console.print("[bold green]? Define your agents[/] [dim](at least 2; empty name to finish)[/]")
+    suggestions = [("researcher", "Research Analyst"), ("writer", "Response Writer")]
+    i = 0
     while True:
-        choices = Prompt.ask("  [dim]Enter numbers[/]", default="1")
-        try:
-            indices = [int(c.strip()) - 1 for c in choices.split(",")]
-            if all(0 <= idx < len(options) for idx in indices):
-                selected = [options[idx] for idx in indices]
-                console.print(f"  [dim]Selected: {', '.join(selected)}[/]")
-                console.print()
-                return selected
-        except ValueError:
-            pass
-        console.print(f"  [red]Please enter comma-separated numbers between 1 and {len(options)}[/]")
+        default_name, default_role = suggestions[i] if i < len(suggestions) else ("", "")
+        name = Prompt.ask(
+            f"  [bold]Agent {i + 1} name[/]",
+            default=default_name if default_name else None,
+        )
+        if not name or not name.strip():
+            if len(agents) >= 2:
+                break
+            console.print("  [red]Define at least two agents for multi-agent orchestration.[/]")
+            continue
+        name = _slugify(name)
+        if any(a.name == name for a in agents):
+            console.print(f"  [red]Agent '{name}' already exists.[/]")
+            continue
+        role = Prompt.ask("    [bold]Role[/]", default=default_role or name.replace("_", " ").title())
+        goal = Prompt.ask("    [bold]Goal[/] [dim](one line)[/]", default=f"Handle {role.lower()} work")
+        agents.append(AgentSpec(name=name, role=role, goal=goal))
+        i += 1
+        if len(agents) >= 2:
+            more = Confirm.ask("  [bold]Add another agent?[/]", default=False)
+            if not more:
+                break
+
+    console.print()
+    return agents, orchestration
 
 
-def gather_project_config(project_name: str) -> dict:
+def gather_project_config(project_name: str) -> ProjectConfig:
     """Gather all project configuration through interactive prompts."""
 
-    # 1. Framework
-    framework = _select(
-        "Agent framework",
-        [
-            "Plain Python (no framework, full control)",
-            "LangChain / LangGraph",
-            "LlamaIndex",
-            "CrewAI",
-            "Haystack",
-            "Salesforce AgentScript (Agentforce DX)",
-        ],
-        default="Plain Python (no framework, full control)",
-    )
+    # 1. Framework — choices derived from the adapter registry
+    adapters = list(ADAPTERS.values())
+    labels = {}
+    for adapter in adapters:
+        tier_note = "" if adapter.tier == 1 else " [Tier 2]"
+        labels[f"{adapter.display_name} ({adapter.description}){tier_note}"] = adapter.name
 
-    # Normalize framework name
-    framework_key = {
-        "Plain Python (no framework, full control)": "plain",
-        "LangChain / LangGraph": "langchain",
-        "LlamaIndex": "llamaindex",
-        "CrewAI": "crewai",
-        "Haystack": "haystack",
-        "Salesforce AgentScript (Agentforce DX)": "agentscript",
-    }[framework]
+    framework_label = _select(
+        "Agent framework",
+        list(labels.keys()),
+        default=next(iter(labels.keys())),
+    )
+    framework_key = labels[framework_label]
+    adapter = ADAPTERS[framework_key]
 
     # 2. LLM Provider
     llm_provider = _select(
         "LLM provider",
         [
-            "OpenAI (GPT-4o, GPT-4o-mini)",
             "Anthropic (Claude)",
-            "Google (Gemini)",
+            "OpenAI (GPT-4o, GPT-4o-mini)",
             "Local (Ollama)",
-            "Multiple (configure later)",
         ],
         default="Anthropic (Claude)",
     )
 
     llm_key = {
-        "OpenAI (GPT-4o, GPT-4o-mini)": "openai",
         "Anthropic (Claude)": "anthropic",
-        "Google (Gemini)": "google",
+        "OpenAI (GPT-4o, GPT-4o-mini)": "openai",
         "Local (Ollama)": "ollama",
-        "Multiple (configure later)": "multiple",
     }[llm_provider]
 
-    # 3. Embedding Model
-    embedding = _select(
-        "Embedding model",
-        [
-            "OpenAI (text-embedding-3-small)",
-            "OpenAI (text-embedding-3-large)",
-            "Cohere (embed-v4)",
-            "HuggingFace — BGE-M3 (local/self-hosted)",
-            "HuggingFace — GTE-Qwen2 (local/self-hosted)",
-            "Nomic (nomic-embed-text-v1.5, local)",
-            "Ollama (local)",
-        ],
-        default="OpenAI (text-embedding-3-small)",
+    # 3. Agent description + team
+    agent_desc = Prompt.ask(
+        "[bold green]? Describe your agent in one line[/] [dim](used in prompts and README)[/]",
+        default="An AI-powered assistant",
     )
+    console.print()
+    agents, orchestration = _gather_agents(adapter.orchestrations, agent_desc)
 
-    embedding_key = {
-        "OpenAI (text-embedding-3-small)": "openai-small",
-        "OpenAI (text-embedding-3-large)": "openai-large",
-        "Cohere (embed-v4)": "cohere",
-        "HuggingFace — BGE-M3 (local/self-hosted)": "bge-m3",
-        "HuggingFace — GTE-Qwen2 (local/self-hosted)": "gte-qwen2",
-        "Nomic (nomic-embed-text-v1.5, local)": "nomic",
-        "Ollama (local)": "ollama",
-    }[embedding]
+    # 4. RAG + retrieval stack
+    include_rag = Confirm.ask("[bold green]? Include RAG pipeline?[/]", default=True)
+    console.print()
 
-    # 4. Vector Database
-    vector_db = _select(
-        "Vector database",
-        [
-            "ChromaDB (local, great for dev)",
-            "Pinecone (managed cloud)",
-            "Weaviate (managed or self-hosted)",
-            "Qdrant (managed or self-hosted)",
-            "pgvector (PostgreSQL extension)",
-        ],
-        default="ChromaDB (local, great for dev)",
-    )
+    embedding_key = "openai-small"
+    vectordb_key = "chroma"
+    retrieval_key = "custom"
+    if include_rag:
+        retrieval = _select(
+            "Retrieval layer",
+            [
+                "Custom pipeline (chunkers + vector store client, full control)",
+                "LlamaIndex (managed loading, chunking, and indexing)",
+            ],
+            default="Custom pipeline (chunkers + vector store client, full control)",
+        )
+        retrieval_key = "llamaindex" if retrieval.startswith("LlamaIndex") else "custom"
 
-    vectordb_key = {
-        "ChromaDB (local, great for dev)": "chroma",
-        "Pinecone (managed cloud)": "pinecone",
-        "Weaviate (managed or self-hosted)": "weaviate",
-        "Qdrant (managed or self-hosted)": "qdrant",
-        "pgvector (PostgreSQL extension)": "pgvector",
-    }[vector_db]
+        embedding = _select(
+            "Embedding model",
+            [
+                "OpenAI (text-embedding-3-small)",
+                "OpenAI (text-embedding-3-large)",
+                "HuggingFace — BGE-M3 (local/self-hosted)",
+                "HuggingFace — GTE-Qwen2 (local/self-hosted)",
+                "Nomic (nomic-embed-text-v1.5, local)",
+            ],
+            default="OpenAI (text-embedding-3-small)",
+        )
+        embedding_key = {
+            "OpenAI (text-embedding-3-small)": "openai-small",
+            "OpenAI (text-embedding-3-large)": "openai-large",
+            "HuggingFace — BGE-M3 (local/self-hosted)": "bge-m3",
+            "HuggingFace — GTE-Qwen2 (local/self-hosted)": "gte-qwen2",
+            "Nomic (nomic-embed-text-v1.5, local)": "nomic",
+        }[embedding]
+
+        vector_db = _select(
+            "Vector database",
+            [
+                "ChromaDB (local, great for dev)",
+                "Pinecone (managed cloud)",
+            ],
+            default="ChromaDB (local, great for dev)",
+        )
+        vectordb_key = {
+            "ChromaDB (local, great for dev)": "chroma",
+            "Pinecone (managed cloud)": "pinecone",
+        }[vector_db]
 
     # 5. Features
     console.print("[bold green]? Which features to include?[/]")
     console.print()
-    include_rag = Confirm.ask("  [bold]Include RAG pipeline?[/]", default=True)
     include_guardrails = Confirm.ask("  [bold]Include guardrails (input/output safety)?[/]", default=True)
     include_eval = Confirm.ask("  [bold]Include evaluation framework?[/]", default=True)
     include_mcp = Confirm.ask("  [bold]Include MCP tool integration?[/]", default=True)
@@ -267,31 +313,27 @@ def gather_project_config(project_name: str) -> dict:
         default=True,
     )
 
-    # 10. Agent description (optional)
-    console.print()
-    agent_desc = Prompt.ask(
-        "[bold green]? Describe your agent in one line[/] [dim](optional, used in README)[/]",
-        default="An AI-powered assistant",
+    return ProjectConfig(
+        project_name=project_name,
+        framework=framework_key,
+        llm_provider=llm_key,
+        embedding_model=embedding_key,
+        vector_db=vectordb_key,
+        retrieval=retrieval_key,
+        include_rag=include_rag,
+        include_guardrails=include_guardrails,
+        include_eval=include_eval,
+        include_mcp=include_mcp,
+        observability=obs_key,
+        ui=ui_key,
+        auth=auth,
+        include_notebooks=include_notebooks,
+        include_data_layer=include_data_layer,
+        data_format=data_format,
+        include_ml_pipeline=include_ml_pipeline,
+        ml_framework=ml_framework,
+        include_docker=include_docker,
+        agent_description=agent_desc,
+        agents=agents,
+        orchestration=orchestration,
     )
-
-    return {
-        "project_name": project_name,
-        "framework": framework_key,
-        "llm_provider": llm_key,
-        "embedding_model": embedding_key,
-        "vector_db": vectordb_key,
-        "include_rag": include_rag,
-        "include_guardrails": include_guardrails,
-        "include_eval": include_eval,
-        "include_mcp": include_mcp,
-        "observability": obs_key,
-        "ui": ui_key,
-        "auth": auth,
-        "include_notebooks": include_notebooks,
-        "include_data_layer": include_data_layer,
-        "data_format": data_format,
-        "include_ml_pipeline": include_ml_pipeline,
-        "ml_framework": ml_framework,
-        "include_docker": include_docker,
-        "agent_description": agent_desc,
-    }

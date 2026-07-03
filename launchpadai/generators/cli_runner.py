@@ -13,7 +13,7 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from agents.base import agent
+from agents import agent
 
 
 def main():
@@ -37,7 +37,7 @@ def main():
             print("Goodbye!")
             break
         if user_input.lower() == "clear":
-            agent.memory.clear(session_id)
+            agent.reset(session_id)
             print("Conversation cleared.\\n")
             continue
 

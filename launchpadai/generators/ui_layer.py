@@ -45,7 +45,7 @@ if not st.session_state.authenticated:
 
         if submitted:
             result = auth_provider.authenticate(
-                username={'"username"' if auth == 'multi_user' else 'None'},
+                username={'username' if auth == 'multi_user' else 'None'},
                 password=password,
             )
             if result["authenticated"]:
@@ -75,7 +75,7 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from agents.base import agent
+from agents import agent
 {auth_import}
 
 # Page config
@@ -171,7 +171,7 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from agents.base import agent
+from agents import agent
 
 
 def respond(message: str, history: list, session_id: str):

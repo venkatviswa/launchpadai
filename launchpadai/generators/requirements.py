@@ -11,62 +11,60 @@ BASE_DEPS = [
 LLM_DEPS = {
     "openai": ["openai>=1.30.0"],
     "anthropic": ["anthropic>=0.30.0"],
-    "google": ["google-generativeai>=0.7.0"],
     "ollama": ["ollama>=0.2.0"],
-    "multiple": ["openai>=1.30.0", "anthropic>=0.30.0"],
 }
 
 FRAMEWORK_DEPS = {
     "plain": [],
-    "langchain": [
-        "langchain>=0.2.0",
-        "langgraph>=0.1.0",
-        "langchain-core>=0.2.0",
-        "langchain-community>=0.2.0",
-    ],
-    "llamaindex": [
-        "llama-index>=0.10.0",
+    "langgraph": [
+        "langgraph>=0.2.0",
+        "langchain>=0.3.0",
+        "langchain-core>=0.3.0",
     ],
     "crewai": [
-        "crewai>=0.30.0",
-    ],
-    "haystack": [
-        "haystack-ai>=2.2.0",
+        "crewai>=0.80.0",
     ],
     "agentscript": [
         "simple-salesforce>=1.12.0",
     ],
 }
 
-# Additional LangChain provider packages
-LANGCHAIN_LLM_DEPS = {
-    "openai": ["langchain-openai>=0.1.0"],
-    "anthropic": ["langchain-anthropic>=0.1.0"],
-    "google": ["langchain-google-genai>=1.0.0"],
-    "ollama": ["langchain-community>=0.2.0"],
-    "multiple": ["langchain-openai>=0.1.0", "langchain-anthropic>=0.1.0"],
+# LangChain provider packages used by the LangGraph adapter (init_chat_model)
+LANGGRAPH_LLM_DEPS = {
+    "openai": ["langchain-openai>=0.2.0"],
+    "anthropic": ["langchain-anthropic>=0.2.0"],
+    "ollama": ["langchain-ollama>=0.2.0"],
 }
 
 EMBEDDING_DEPS = {
     "openai-small": ["openai>=1.30.0"],
     "openai-large": ["openai>=1.30.0"],
-    "cohere": ["cohere>=5.0.0"],
     "bge-m3": ["sentence-transformers>=2.7.0", "torch>=2.0.0"],
     "gte-qwen2": ["sentence-transformers>=2.7.0", "torch>=2.0.0"],
     "nomic": ["sentence-transformers>=2.7.0", "nomic>=3.0.0"],
-    "ollama": ["ollama>=0.2.0"],
 }
 
 VECTORDB_DEPS = {
     "chroma": ["chromadb>=0.5.0"],
-    "pinecone": ["pinecone-client>=3.0.0"],
-    "weaviate": ["weaviate-client>=4.6.0"],
-    "qdrant": ["qdrant-client>=1.9.0"],
-    "pgvector": ["pgvector>=0.2.0", "psycopg2-binary>=2.9.0", "sqlalchemy>=2.0.0"],
+    "pinecone": ["pinecone>=3.0.0"],
+}
+
+# Retrieval-layer option (pairs with any framework)
+LLAMAINDEX_RETRIEVAL_DEPS = [
+    "llama-index-core>=0.11.0",
+]
+
+LLAMAINDEX_EMBEDDING_DEPS = {
+    "openai-small": ["llama-index-embeddings-openai>=0.2.0"],
+    "openai-large": ["llama-index-embeddings-openai>=0.2.0"],
+    "bge-m3": ["llama-index-embeddings-huggingface>=0.3.0"],
+    "gte-qwen2": ["llama-index-embeddings-huggingface>=0.3.0"],
+    "nomic": ["llama-index-embeddings-huggingface>=0.3.0"],
 }
 
 OBSERVABILITY_DEPS = {
-    "langfuse": ["langfuse>=2.30.0"],
+    # Generated tracer code targets the langfuse v2 SDK API
+    "langfuse": ["langfuse>=2.30.0,<3.0.0"],
     "langsmith": ["langsmith>=0.1.0"],
     "opentelemetry": [
         "opentelemetry-api>=1.25.0",
@@ -80,7 +78,7 @@ OBSERVABILITY_DEPS = {
 UI_DEPS = {
     "streamlit": ["streamlit>=1.35.0"],
     "gradio": ["gradio>=4.30.0"],
-    "nextjs": ["fastapi>=0.111.0", "uvicorn>=0.30.0"],
+    "nextjs": [],
     "none": [],
 }
 
@@ -93,6 +91,7 @@ GUARDRAIL_DEPS = [
     "presidio-anonymizer>=2.2.0",
 ]
 
+# The API layer is always generated, so these are always required
 API_DEPS = [
     "fastapi>=0.111.0",
     "uvicorn>=0.30.0",
@@ -129,7 +128,7 @@ ML_FRAMEWORK_DEPS = {
     "pytorch": ["torch>=2.0.0", "scikit-learn>=1.5.0"],
     "xgboost": ["xgboost>=2.0.0", "scikit-learn>=1.5.0", "joblib>=1.4.0"],
     "transformers": [
-        "transformers>=4.40.0",
+        "transformers>=4.46.0",
         "datasets>=2.19.0",
         "torch>=2.0.0",
         "accelerate>=0.30.0",
@@ -151,15 +150,9 @@ def generate_requirements(config: dict, project_path: Path):
     # LLM provider
     deps.update(LLM_DEPS.get(config["llm_provider"], []))
 
-    # LangChain-specific LLM packages
-    if config["framework"] == "langchain":
-        deps.update(LANGCHAIN_LLM_DEPS.get(config["llm_provider"], []))
-
-    # Embedding
-    deps.update(EMBEDDING_DEPS.get(config["embedding_model"], []))
-
-    # Vector DB
-    deps.update(VECTORDB_DEPS.get(config["vector_db"], []))
+    # LangChain provider packages for the LangGraph adapter
+    if config["framework"] == "langgraph":
+        deps.update(LANGGRAPH_LLM_DEPS.get(config["llm_provider"], []))
 
     # Observability
     deps.update(OBSERVABILITY_DEPS.get(config["observability"], []))
@@ -167,9 +160,16 @@ def generate_requirements(config: dict, project_path: Path):
     # UI
     deps.update(UI_DEPS.get(config["ui"], []))
 
-    # Optional features
+    # RAG stack — embeddings and vector store are only needed when RAG is on
     if config["include_rag"]:
         deps.update(RAG_DEPS)
+        if config.get("retrieval") == "llamaindex":
+            # LlamaIndex owns embedding + storage for its own index
+            deps.update(LLAMAINDEX_RETRIEVAL_DEPS)
+            deps.update(LLAMAINDEX_EMBEDDING_DEPS.get(config["embedding_model"], []))
+        else:
+            deps.update(EMBEDDING_DEPS.get(config["embedding_model"], []))
+            deps.update(VECTORDB_DEPS.get(config["vector_db"], []))
 
     if config["include_guardrails"]:
         deps.update(GUARDRAIL_DEPS)
@@ -190,9 +190,8 @@ def generate_requirements(config: dict, project_path: Path):
     if config.get("include_ml_pipeline"):
         deps.update(ML_FRAMEWORK_DEPS.get(config.get("ml_framework", "sklearn"), []))
 
-    # API layer (always included for non-CLI projects)
-    if config["ui"] not in ("none", "streamlit", "gradio"):
-        deps.update(API_DEPS)
+    # API layer is always generated
+    deps.update(API_DEPS)
 
     # Sort and write
     sorted_deps = sorted(deps, key=lambda x: x.lower())

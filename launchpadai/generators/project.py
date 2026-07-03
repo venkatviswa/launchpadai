@@ -4,6 +4,9 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 import yaml
 
+from launchpadai.config import ProjectConfig
+from launchpadai.frameworks.registry import validate_config
+
 from launchpadai.generators.requirements import generate_requirements
 from launchpadai.generators.config_files import generate_config_files
 from launchpadai.generators.models_layer import generate_models_layer
@@ -31,7 +34,10 @@ console = Console()
 class ProjectGenerator:
     """Generates the full project based on collected configuration."""
 
-    def __init__(self, config: dict, project_path: Path):
+    def __init__(self, config: ProjectConfig | dict, project_path: Path):
+        if isinstance(config, dict):
+            config = ProjectConfig.model_validate(config)
+        validate_config(config)
         self.config = config
         self.path = project_path
 
@@ -133,4 +139,4 @@ class ProjectGenerator:
     def _save_config(self):
         """Save the project configuration as launchpad.yaml."""
         with open(self.path / "launchpad.yaml", "w") as f:
-            yaml.dump(self.config, f, default_flow_style=False, sort_keys=False)
+            yaml.dump(self.config.to_dict(), f, default_flow_style=False, sort_keys=False)
