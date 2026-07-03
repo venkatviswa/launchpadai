@@ -1,7 +1,7 @@
 """Integration tests — full project generation with pairwise configs.
 
-Uses allpairspy to generate ~150-250 configs that cover every 2-way
-interaction between config options, then validates each generated project.
+Uses allpairspy to generate configs that cover every 2-way interaction
+between config options, then validates each generated project.
 """
 import ast
 import json
@@ -12,7 +12,6 @@ from tests.conftest import PAIRWISE_CONFIGS
 
 
 @pytest.mark.integration
-@pytest.mark.slow
 @pytest.mark.parametrize(
     "config",
     PAIRWISE_CONFIGS,
@@ -38,12 +37,13 @@ def test_pairwise_generation(tmp_path, config):
                 errors.append(f"{py_file.relative_to(project_path)}: {e}")
     assert not errors, f"Syntax errors in config {config['project_name']}:\n" + "\n".join(errors)
 
-    # 2. All .yaml files must parse
-    for yaml_file in project_path.rglob("*.yaml"):
-        try:
-            yaml.safe_load(yaml_file.read_text())
-        except yaml.YAMLError as e:
-            pytest.fail(f"Invalid YAML {yaml_file.relative_to(project_path)}: {e}")
+    # 2. All .yaml/.yml files (incl. docker-compose.yml) must parse
+    for pattern in ("*.yaml", "*.yml"):
+        for yaml_file in project_path.rglob(pattern):
+            try:
+                yaml.safe_load(yaml_file.read_text())
+            except yaml.YAMLError as e:
+                pytest.fail(f"Invalid YAML {yaml_file.relative_to(project_path)}: {e}")
 
     # 3. All .json and .ipynb files must parse
     for json_file in project_path.rglob("*.json"):
@@ -65,3 +65,8 @@ def test_pairwise_generation(tmp_path, config):
 
     # 5. launchpad.yaml must exist
     assert (project_path / "launchpad.yaml").exists()
+
+    # 6. Uniform agents entrypoint must exist for every framework
+    agents_init = project_path / "agents" / "__init__.py"
+    assert agents_init.exists()
+    assert "agent = AgentEntrypoint()" in agents_init.read_text()

@@ -98,11 +98,12 @@ class ProjectGenerator:
         ]
 
         if self.config["include_rag"]:
-            dirs.extend([
-                "knowledge/ingestion",
-                "knowledge/vectorstore",
-                "knowledge/retrieval",
-            ])
+            dirs.append("knowledge/retrieval")
+            if self.config["retrieval"] == "custom":
+                dirs.extend([
+                    "knowledge/ingestion",
+                    "knowledge/vectorstore",
+                ])
 
         if self.config["include_guardrails"]:
             dirs.append("guardrails")

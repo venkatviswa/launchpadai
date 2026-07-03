@@ -47,8 +47,9 @@ def test_minimal_config(tmp_path, make_config):
 def test_maximal_config(tmp_path, make_config):
     """Everything enabled — maximum feature set."""
     config = make_config(
-        framework="langchain", llm_provider="openai",
-        embedding_model="bge-m3", vector_db="pgvector",
+        framework="langgraph", llm_provider="openai",
+        embedding_model="bge-m3", vector_db="pinecone",
+        retrieval="custom", orchestration="supervisor",
         include_rag=True, include_guardrails=True, include_eval=True,
         include_mcp=True, observability="opentelemetry",
         ui="nextjs", auth="oauth",
@@ -71,6 +72,10 @@ def test_maximal_config(tmp_path, make_config):
     assert (project_path / "data_processing").is_dir()
     assert (project_path / "notebooks").is_dir()
 
+    # Multi-agent slices should exist for the default supervisor agents
+    assert (project_path / "agents" / "researcher").is_dir()
+    assert (project_path / "agents" / "writer").is_dir()
+
     # All .py files must parse
     errors = []
     for py_file in project_path.rglob("*.py"):
@@ -82,9 +87,10 @@ def test_maximal_config(tmp_path, make_config):
                 errors.append(f"{py_file.relative_to(project_path)}: {e}")
     assert not errors, f"Syntax errors:\n" + "\n".join(errors)
 
-    # All YAML files must parse
-    for yaml_file in project_path.rglob("*.yaml"):
-        yaml.safe_load(yaml_file.read_text())
+    # All YAML files must parse (incl. docker-compose.yml)
+    for pattern in ("*.yaml", "*.yml"):
+        for yaml_file in project_path.rglob(pattern):
+            yaml.safe_load(yaml_file.read_text())
 
     # All JSON files must parse
     for json_file in project_path.rglob("*.json"):
@@ -92,7 +98,7 @@ def test_maximal_config(tmp_path, make_config):
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("framework", ["plain", "langchain", "llamaindex", "crewai", "haystack"])
+@pytest.mark.parametrize("framework", ["plain", "langgraph", "crewai", "agentscript"])
 def test_every_framework_generates_cleanly(tmp_path, make_config, framework):
     """Each framework should produce a valid project."""
     config = make_config(framework=framework, include_rag=True)
@@ -104,6 +110,28 @@ def test_every_framework_generates_cleanly(tmp_path, make_config, framework):
         content = py_file.read_text()
         if content.strip():
             ast.parse(content)
+
+
+@pytest.mark.integration
+def test_unknown_framework_rejected(tmp_path, make_config):
+    """Removed/unknown frameworks are rejected by the adapter registry."""
+    for framework in ["langchain", "llamaindex", "haystack", "nonsense"]:
+        config = make_config(framework=framework)
+        project_path = tmp_path / f"bad-{framework}"
+        project_path.mkdir()
+        with pytest.raises(KeyError):
+            ProjectGenerator(config, project_path)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("orchestration", ["sequential", "supervisor"])
+def test_agentscript_rejects_multi_agent_orchestration(tmp_path, make_config, orchestration):
+    """agentscript supports only single-agent orchestration."""
+    config = make_config(framework="agentscript", orchestration=orchestration)
+    project_path = tmp_path / f"as-{orchestration}"
+    project_path.mkdir()
+    with pytest.raises(ValueError):
+        ProjectGenerator(config, project_path)
 
 
 @pytest.mark.integration
@@ -123,8 +151,11 @@ def test_special_characters_in_project_name(tmp_path, make_config):
 
 @pytest.mark.integration
 def test_launchpad_yaml_saved_correctly(tmp_path, make_config):
-    """launchpad.yaml should contain the config we passed in."""
-    config = make_config(framework="crewai", llm_provider="anthropic")
+    """launchpad.yaml should round-trip the config, including agents."""
+    config = make_config(
+        framework="crewai", llm_provider="anthropic",
+        retrieval="llamaindex", orchestration="sequential",
+    )
     project_path = tmp_path / config["project_name"]
     project_path.mkdir()
     ProjectGenerator(config, project_path).generate()
@@ -132,3 +163,8 @@ def test_launchpad_yaml_saved_correctly(tmp_path, make_config):
     saved = yaml.safe_load((project_path / "launchpad.yaml").read_text())
     assert saved["framework"] == "crewai"
     assert saved["llm_provider"] == "anthropic"
+    assert saved["retrieval"] == "llamaindex"
+    assert saved["orchestration"] == "sequential"
+    # agents serialize as a list of dicts
+    agent_names = [a["name"] for a in saved["agents"]]
+    assert agent_names == ["researcher", "writer"]
