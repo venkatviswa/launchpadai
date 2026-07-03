@@ -318,7 +318,7 @@ def _show_next_steps(config: dict, project_path: Path):
         expand=False,
     ))
     console.print()
-    console.print("[bold green]Happy building! [/][dim]Report issues at github.com/launchpadai/launchpadai[/]")
+    console.print("[bold green]Happy building! [/][dim]Report issues at github.com/venkatviswa/launchpadai[/]")
 
 
 if __name__ == "__main__":

@@ -92,7 +92,7 @@ class Settings:
 '''
     elif config["llm_provider"] == "anthropic":
         settings += '''    ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-    LLM_MODEL = os.getenv("LLM_MODEL", "claude-sonnet-4-20250514")
+    LLM_MODEL = os.getenv("LLM_MODEL", "claude-opus-4-8")
     LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
 '''
     elif config["llm_provider"] == "ollama":
@@ -197,7 +197,7 @@ node_modules/
 
 {config['agent_description']}
 
-> Generated with [LaunchpadAI](https://github.com/launchpadai/launchpad)
+> Generated with [LaunchpadAI](https://github.com/venkatviswa/launchpadai)
 
 ---
 

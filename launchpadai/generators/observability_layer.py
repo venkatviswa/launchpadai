@@ -123,7 +123,7 @@ class TraceContext:
 
         Args:
             name: Name of the generation step
-            model: Model identifier (e.g. 'claude-sonnet-4-20250514')
+            model: Model identifier (e.g. 'claude-opus-4-8')
             input_messages: The messages sent to the LLM
             output: The LLM response text
             usage: Token counts {'input': N, 'output': N, 'total': N}
@@ -189,7 +189,7 @@ tracer = LangFuseTracer()
 #     # Log LLM call
 #     trace.generation(
 #         name="main_llm_call",
-#         model="claude-sonnet-4-20250514",
+#         model="claude-opus-4-8",
 #         input_messages=messages,
 #         output=response_text,
 #         usage={"input": prompt_tokens, "output": completion_tokens},
@@ -441,7 +441,7 @@ class OTelTracer:
         """Trace an LLM API call.
 
         Usage:
-            with tracer.trace_llm_call("claude-sonnet-4-20250514") as span:
+            with tracer.trace_llm_call("claude-opus-4-8") as span:
                 response = llm.chat(messages)
                 span.set_attribute("llm.tokens.input", input_tokens)
                 span.set_attribute("llm.tokens.output", output_tokens)
@@ -506,7 +506,7 @@ tracer = OTelTracer()
 #             ret_span.set_attribute("retrieval.num_results", len(results))
 #
 #         # Trace LLM call
-#         with tracer.trace_llm_call("claude-sonnet-4-20250514", messages) as llm_span:
+#         with tracer.trace_llm_call("claude-opus-4-8", messages) as llm_span:
 #             response = llm.chat(messages)
 #             llm_span.set_attribute("llm.tokens.input", response.usage.input_tokens)
 #             llm_span.set_attribute("llm.tokens.output", response.usage.output_tokens)
@@ -565,12 +565,9 @@ MODEL_PRICING = {
     "gpt-4o-mini": {"input": 0.15, "output": 0.60},
     "gpt-4-turbo": {"input": 10.00, "output": 30.00},
     # Anthropic
-    "claude-opus-4-20250514": {"input": 15.00, "output": 75.00},
-    "claude-sonnet-4-20250514": {"input": 3.00, "output": 15.00},
-    "claude-haiku-4-5-20251001": {"input": 0.80, "output": 4.00},
-    # Google
-    "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
-    "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
+    "claude-opus-4-8": {"input": 5.00, "output": 25.00},
+    "claude-sonnet-5": {"input": 3.00, "output": 15.00},
+    "claude-haiku-4-5": {"input": 1.00, "output": 5.00},
     # Embedding models
     "text-embedding-3-small": {"input": 0.02, "output": 0.0},
     "text-embedding-3-large": {"input": 0.13, "output": 0.0},
@@ -688,7 +685,7 @@ cost_tracker = CostTracker()
 # # After each LLM call:
 # response = llm.chat(messages)
 # cost_tracker.log_usage(
-#     model="claude-sonnet-4-20250514",
+#     model="claude-opus-4-8",
 #     input_tokens=response.usage.input_tokens,
 #     output_tokens=response.usage.output_tokens,
 #     session_id="user_123",

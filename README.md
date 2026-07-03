@@ -1,17 +1,18 @@
 # LaunchpadAI
 
-LaunchpadAI is an interactive CLI that scaffolds runnable, multi-agent AI projects in seconds. Instead of spending days wiring together LLMs, frameworks, retrieval, guardrails, and UIs, answer a few questions (or pass a few flags) and get a working, well-architected project — ready to customize and deploy.
+[![CI](https://github.com/venkatviswa/launchpadai/actions/workflows/ci.yml/badge.svg)](https://github.com/venkatviswa/launchpadai/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+LaunchpadAI is an interactive CLI that scaffolds runnable, multi-agent AI projects in seconds. Answer a few questions (or pass a few flags) and get a working, well-architected project — ready to customize and deploy.
+
+**Quick links:** [Quick Start](#quick-start) · [CLI Commands](#cli-commands) · [Multi-Agent Teams](#multi-agent-teams) · [Configuration Options](#configuration-options) · [Project Structure](#generated-project-structure) · [Development](#development)
 
 ---
 
 ## Why LaunchpadAI?
 
-Building an AI agent today means making dozens of decisions before writing a single line of business logic:
-
-- Which framework? Which LLM provider? One agent or a team of agents?
-- How do I structure RAG pipelines, tool calling, and memory?
-- What about guardrails, evaluation, observability, and auth?
-- How do I containerize and deploy this thing?
+Building an AI agent today means making dozens of decisions before writing a single line of business logic: which framework, which LLM provider, one agent or a team, how to structure RAG, tool calling, memory, guardrails, evaluation, observability, auth, and deployment.
 
 **LaunchpadAI eliminates this boilerplate.** It generates a complete, opinionated project with clean separation of concerns and a uniform agent interface — every layer independently configurable.
 
@@ -159,11 +160,11 @@ Tier 1 adapters are fully supported and smoke-tested in CI (render → install �
 
 ### LLM Provider
 
-| Provider | Models |
-|----------|--------|
-| **Anthropic** | Claude |
-| **OpenAI** | GPT-4o, GPT-4o-mini |
-| **Ollama** | Local models (Llama, Mistral, etc.) |
+| Provider | Default model | Notes |
+|----------|--------------|-------|
+| **Anthropic** | `claude-opus-4-8` | Any Claude model via the `LLM_MODEL` env var |
+| **OpenAI** | `gpt-4o` | Any OpenAI chat model via `LLM_MODEL` |
+| **Ollama** | `llama3.1` | Local models (Llama, Mistral, etc.) |
 
 ### Retrieval Layer (RAG)
 
@@ -235,35 +236,30 @@ Only the layers you enable are generated. **AgentScript projects** additionally 
 
 ---
 
-## Request Flow
+## How a Request Flows
 
-1. **User sends a message** through the UI or API
-2. **Authentication** validates the request (if enabled)
-3. **The uniform entrypoint** (`agents/__init__.py`) receives it
-4. **Input guardrails** check for prompt injection, PII, and abuse
-5. **The orchestrator** routes the request (framework + orchestration mode)
-6. **RAG retrieval** fetches context (if enabled)
-7. **LLM calls + tool execution** run inside each agent's loop
-8. **Output guardrails** validate and redact the response
-9. **Observability** records the trace
-10. **Response** returns to the user
+```
+UI / API  →  auth  →  agents/__init__.py (uniform entrypoint)
+              →  input guardrails  →  orchestrator (framework + mode)
+              →  per-agent loop: RAG context + LLM calls + tools
+              →  output guardrails  →  tracing  →  response
+```
 
----
-
-## Architecture: Framework Adapters
-
-The CLI itself is built around a small plugin architecture:
-
-- `launchpadai/config.py` — `ProjectConfig` / `AgentSpec` (Pydantic v2): every option is validated before generation
-- `launchpadai/frameworks/` — one adapter module per framework, each exposing a frozen `FrameworkAdapter` and a `generate()` hook
-- `launchpadai/frameworks/registry.py` — the single registry; CLI choices and generation dispatch derive from it
-- `launchpadai/generators/` — framework-agnostic layer generators (API, guardrails, memory, knowledge, ...)
-
-Adding a framework = one adapter module + a registry entry + dependency mappings + tests. Core generators never branch on framework names.
+Every generated project follows this shape regardless of framework — only the orchestrator differs.
 
 ---
 
 ## Development
+
+### Repository Architecture
+
+The CLI is built around a small plugin architecture:
+
+- `launchpadai/config.py` — `ProjectConfig` / `AgentSpec` (Pydantic v2): every option is validated before generation
+- `launchpadai/frameworks/` — one adapter module per framework, each exposing a frozen `FrameworkAdapter` and a `generate()` hook; `registry.py` is the single registry that CLI choices and generation dispatch derive from
+- `launchpadai/generators/` — framework-agnostic layer generators (API, guardrails, memory, knowledge, ...)
+
+Adding a framework = one adapter module + a registry entry + dependency mappings + tests. Core generators never branch on framework names.
 
 ### Prerequisites
 
@@ -299,23 +295,7 @@ CI runs the fast suite on every push, plus one smoke lane per framework adapter 
 
 ## Tech Stack
 
-**LaunchpadAI CLI:**
-- [Typer](https://typer.tiangolo.com/) — CLI framework
-- [Rich](https://rich.readthedocs.io/) — terminal formatting and progress indicators
-- [Pydantic v2](https://docs.pydantic.dev/) — typed, validated configuration
-- [PyYAML](https://pyyaml.org/) — configuration persistence
-
-**Generated projects use (based on your selections):**
-- FastAPI, Pydantic (API layer)
-- LangGraph, CrewAI, Salesforce AgentScript (frameworks)
-- LlamaIndex (retrieval option)
-- OpenAI, Anthropic, Ollama SDKs (LLM providers)
-- ChromaDB, Pinecone (vector stores)
-- Streamlit, Gradio, Next.js (UIs)
-- Presidio (guardrails/PII detection)
-- LangFuse, LangSmith, OpenTelemetry (observability)
-- scikit-learn, PyTorch, XGBoost, HuggingFace Transformers (ML)
-- Docker, docker-compose (deployment)
+The CLI itself is deliberately small: [Typer](https://typer.tiangolo.com/) (CLI), [Rich](https://rich.readthedocs.io/) (terminal output), [Pydantic v2](https://docs.pydantic.dev/) (typed configuration), and [PyYAML](https://pyyaml.org/) (config persistence). Generated projects pull in only the dependencies for the options you select — see [Configuration Options](#configuration-options).
 
 ---
 

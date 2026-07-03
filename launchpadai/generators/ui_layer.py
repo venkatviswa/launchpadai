@@ -129,7 +129,7 @@ with st.sidebar:
         st.rerun()
 
     st.markdown("---")
-    st.markdown("Built with [LaunchpadAI](https://github.com/launchpadai/launchpadai)")
+    st.markdown("Built with [LaunchpadAI](https://github.com/venkatviswa/launchpadai)")
 ''')
 
 
@@ -202,7 +202,7 @@ with gr.Blocks(title="{config['project_name']}") as demo:
     )
 
     gr.Markdown("---")
-    gr.Markdown("Built with [LaunchpadAI](https://github.com/launchpadai/launchpadai)")
+    gr.Markdown("Built with [LaunchpadAI](https://github.com/venkatviswa/launchpadai)")
 
 
 if __name__ == "__main__":
