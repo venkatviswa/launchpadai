@@ -101,12 +101,16 @@ class Settings:
     LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
 '''
 
+    chroma_dir = ""
+    if config["vector_db"] == "chroma":
+        chroma_dir = '\n    CHROMA_PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR", "./data/chroma")'
+
     settings += f'''
     # Embedding
     EMBEDDING_PROVIDER = "{config['embedding_model']}"
 
     # Vector Database
-    VECTOR_DB = "{config['vector_db']}"
+    VECTOR_DB = "{config['vector_db']}"{chroma_dir}
 
     # RAG
     CHUNK_SIZE = 1000
