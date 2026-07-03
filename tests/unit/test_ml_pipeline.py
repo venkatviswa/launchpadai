@@ -41,3 +41,24 @@ def test_generates_expected_files(tmp_path, make_config, ml_framework):
     assert (tmp_path / "ml_models" / "inference" / "predictor.py").exists()
     assert (tmp_path / "ml_models" / "registry.py").exists()
     assert (tmp_path / "ml_models" / "configs" / "training_config.yaml").exists()
+
+
+@pytest.mark.unit
+def test_xgboost_does_not_pass_use_label_encoder(tmp_path, make_config):
+    """use_label_encoder was removed from the XGBoost sklearn API."""
+    config = make_config(include_ml_pipeline=True, ml_framework="xgboost")
+    generate_ml_pipeline(config, tmp_path)
+
+    content = (tmp_path / "ml_models" / "training" / "train.py").read_text()
+    assert "use_label_encoder" not in content
+
+
+@pytest.mark.unit
+def test_transformers_uses_eval_strategy(tmp_path, make_config):
+    """TrainingArguments renamed evaluation_strategy to eval_strategy."""
+    config = make_config(include_ml_pipeline=True, ml_framework="transformers")
+    generate_ml_pipeline(config, tmp_path)
+
+    content = (tmp_path / "ml_models" / "training" / "train.py").read_text()
+    assert "eval_strategy=" in content
+    assert "evaluation_strategy=" not in content

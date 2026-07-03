@@ -4,15 +4,7 @@ import pytest
 from launchpadai.generators.api_layer import generate_api_layer
 
 
-FRAMEWORKS = ["plain", "langchain", "llamaindex", "crewai", "haystack"]
-
-EXPECTED_IMPORTS = {
-    "plain": "from agents.base import agent",
-    "langchain": "from agents.graph import agent",
-    "llamaindex": "from agents.agent import agent",
-    "crewai": "from agents.crew import run_crew",
-    "haystack": "from agents.base import agent",
-}
+FRAMEWORKS = ["plain", "langgraph", "crewai", "agentscript"]
 
 
 @pytest.mark.unit
@@ -29,21 +21,23 @@ def test_generates_valid_python(tmp_path, make_config, framework):
 
 @pytest.mark.unit
 @pytest.mark.parametrize("framework", FRAMEWORKS)
-def test_correct_agent_import(tmp_path, make_config, framework):
+def test_uniform_agent_import(tmp_path, make_config, framework):
+    """Every framework exposes the same entrypoint: from agents import agent."""
     config = make_config(framework=framework)
     generate_api_layer(config, tmp_path)
 
     content = (tmp_path / "api" / "routes.py").read_text()
-    assert EXPECTED_IMPORTS[framework] in content
+    assert "from agents import agent" in content
 
 
 @pytest.mark.unit
-def test_crewai_uses_run_crew(tmp_path, make_config):
-    config = make_config(framework="crewai")
+@pytest.mark.parametrize("framework", FRAMEWORKS)
+def test_routes_call_agent_run(tmp_path, make_config, framework):
+    config = make_config(framework=framework)
     generate_api_layer(config, tmp_path)
 
     content = (tmp_path / "api" / "routes.py").read_text()
-    assert "run_crew(request.message)" in content
+    assert "agent.run(request.message, session_id=request.session_id)" in content
 
 
 @pytest.mark.unit

@@ -35,6 +35,36 @@ def test_streamlit_auth_integration(tmp_path, make_config):
 
 
 @pytest.mark.unit
+def test_streamlit_multi_user_login_passes_username_variable(tmp_path, make_config):
+    """multi_user login must pass the username the user typed, not a literal."""
+    config = make_config(ui="streamlit", auth="multi_user")
+    generate_ui_layer(config, tmp_path)
+
+    content = (tmp_path / "ui" / "app.py").read_text()
+    assert 'username = st.text_input("Username"' in content
+    assert "username=username," in content
+    assert 'username="username"' not in content
+
+
+@pytest.mark.unit
+def test_streamlit_simple_auth_passes_no_username(tmp_path, make_config):
+    config = make_config(ui="streamlit", auth="simple")
+    generate_ui_layer(config, tmp_path)
+
+    content = (tmp_path / "ui" / "app.py").read_text()
+    assert "username=None," in content
+
+
+@pytest.mark.unit
+def test_ui_imports_agent_entrypoint(tmp_path, make_config):
+    config = make_config(ui="streamlit")
+    generate_ui_layer(config, tmp_path)
+
+    content = (tmp_path / "ui" / "app.py").read_text()
+    assert "from agents import agent" in content
+
+
+@pytest.mark.unit
 def test_streamlit_no_auth(tmp_path, make_config):
     config = make_config(ui="streamlit", auth="none")
     generate_ui_layer(config, tmp_path)

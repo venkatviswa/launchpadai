@@ -15,6 +15,18 @@ def test_generates_valid_python(tmp_path, make_config):
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("framework", ["plain", "langgraph", "crewai", "agentscript"])
+def test_imports_uniform_entrypoint(tmp_path, make_config, framework):
+    """cli_runner uses the uniform entrypoint for every framework."""
+    config = make_config(framework=framework)
+    (tmp_path / "agents").mkdir(parents=True)
+    generate_cli_runner(config, tmp_path)
+
+    content = (tmp_path / "agents" / "cli_runner.py").read_text()
+    assert "from agents import agent" in content
+
+
+@pytest.mark.unit
 def test_contains_project_name(tmp_path, make_config):
     config = make_config(project_name="my-bot")
     (tmp_path / "agents").mkdir(parents=True)

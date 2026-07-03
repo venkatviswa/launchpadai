@@ -4,8 +4,15 @@ from launchpadai.generators.requirements import (
     generate_requirements,
     LLM_DEPS, FRAMEWORK_DEPS, EMBEDDING_DEPS, VECTORDB_DEPS,
     OBSERVABILITY_DEPS, UI_DEPS, ML_FRAMEWORK_DEPS, DATA_FORMAT_DEPS,
-    BASE_DEPS, RAG_DEPS, GUARDRAIL_DEPS, MCP_DEPS,
+    BASE_DEPS, RAG_DEPS, GUARDRAIL_DEPS, MCP_DEPS, API_DEPS,
+    LANGGRAPH_LLM_DEPS, LLAMAINDEX_RETRIEVAL_DEPS, LLAMAINDEX_EMBEDDING_DEPS,
 )
+
+
+LLM_PROVIDERS = ["openai", "anthropic", "ollama"]
+FRAMEWORKS = ["plain", "langgraph", "crewai", "agentscript"]
+VECTOR_DBS = ["chroma", "pinecone"]
+EMBEDDING_MODELS = ["openai-small", "openai-large", "bge-m3", "gte-qwen2", "nomic"]
 
 
 def _parse_requirements(path):
@@ -21,7 +28,7 @@ def _parse_requirements(path):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("llm_provider", ["openai", "anthropic", "google", "ollama", "multiple"])
+@pytest.mark.parametrize("llm_provider", LLM_PROVIDERS)
 def test_llm_packages_present(tmp_path, make_config, llm_provider):
     config = make_config(llm_provider=llm_provider)
     generate_requirements(config, tmp_path)
@@ -33,7 +40,7 @@ def test_llm_packages_present(tmp_path, make_config, llm_provider):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("framework", ["plain", "langchain", "llamaindex", "crewai", "haystack"])
+@pytest.mark.parametrize("framework", FRAMEWORKS)
 def test_framework_packages_present(tmp_path, make_config, framework):
     config = make_config(framework=framework)
     generate_requirements(config, tmp_path)
@@ -45,9 +52,40 @@ def test_framework_packages_present(tmp_path, make_config, framework):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("vector_db", ["chroma", "pinecone", "weaviate", "qdrant", "pgvector"])
+def test_langgraph_framework_deps(tmp_path, make_config):
+    config = make_config(framework="langgraph")
+    generate_requirements(config, tmp_path)
+    packages = _parse_requirements(tmp_path / "requirements.txt")
+
+    assert "langgraph" in packages
+    assert "langchain" in packages
+    assert "langchain-core" in packages
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("llm_provider", LLM_PROVIDERS)
+def test_langgraph_llm_integration_packages(tmp_path, make_config, llm_provider):
+    """LangGraph + specific LLM should include the langchain-<provider> package."""
+    config = make_config(framework="langgraph", llm_provider=llm_provider)
+    generate_requirements(config, tmp_path)
+    packages = _parse_requirements(tmp_path / "requirements.txt")
+
+    for dep in LANGGRAPH_LLM_DEPS[llm_provider]:
+        assert dep.split(">=")[0] in packages
+
+
+@pytest.mark.unit
+def test_langchain_provider_packages_only_for_langgraph(tmp_path, make_config):
+    config = make_config(framework="plain", llm_provider="anthropic")
+    generate_requirements(config, tmp_path)
+    packages = _parse_requirements(tmp_path / "requirements.txt")
+    assert "langchain-anthropic" not in packages
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("vector_db", VECTOR_DBS)
 def test_vectordb_packages_present(tmp_path, make_config, vector_db):
-    config = make_config(vector_db=vector_db)
+    config = make_config(include_rag=True, retrieval="custom", vector_db=vector_db)
     generate_requirements(config, tmp_path)
     packages = _parse_requirements(tmp_path / "requirements.txt")
 
@@ -57,9 +95,20 @@ def test_vectordb_packages_present(tmp_path, make_config, vector_db):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("embedding_model", ["openai-small", "openai-large", "cohere", "bge-m3", "gte-qwen2", "nomic", "ollama"])
+def test_pinecone_package_renamed(tmp_path, make_config):
+    """The pinecone dep is the 'pinecone' package, not the old 'pinecone-client'."""
+    config = make_config(include_rag=True, retrieval="custom", vector_db="pinecone")
+    generate_requirements(config, tmp_path)
+    packages = _parse_requirements(tmp_path / "requirements.txt")
+
+    assert "pinecone" in packages
+    assert "pinecone-client" not in packages
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("embedding_model", EMBEDDING_MODELS)
 def test_embedding_packages_present(tmp_path, make_config, embedding_model):
-    config = make_config(embedding_model=embedding_model)
+    config = make_config(include_rag=True, retrieval="custom", embedding_model=embedding_model)
     generate_requirements(config, tmp_path)
     packages = _parse_requirements(tmp_path / "requirements.txt")
 
@@ -76,8 +125,18 @@ def test_observability_packages(tmp_path, make_config, observability):
     packages = _parse_requirements(tmp_path / "requirements.txt")
 
     for dep in OBSERVABILITY_DEPS[observability]:
-        dep_name = dep.split(">=")[0]
+        dep_name = dep.split(">=")[0].split("<")[0]
         assert dep_name in packages, f"Missing {dep_name} for {observability}"
+
+
+@pytest.mark.unit
+def test_langfuse_pinned_below_v3(tmp_path, make_config):
+    """Generated tracer targets the langfuse v2 SDK, so the dep is pinned <3.0.0."""
+    config = make_config(observability="langfuse")
+    generate_requirements(config, tmp_path)
+
+    content = (tmp_path / "requirements.txt").read_text()
+    assert "langfuse>=2.30.0,<3.0.0" in content
 
 
 @pytest.mark.unit
@@ -93,22 +152,81 @@ def test_ui_packages(tmp_path, make_config, ui):
 
 
 @pytest.mark.unit
+def test_api_deps_always_present(tmp_path, make_config):
+    """The API layer is always generated, so its deps are always required."""
+    config = make_config(
+        include_rag=False, include_guardrails=False, include_eval=False,
+        include_mcp=False, include_notebooks=False, include_data_layer=False,
+        include_ml_pipeline=False, include_docker=False,
+        ui="none", observability="none",
+    )
+    generate_requirements(config, tmp_path)
+    packages = _parse_requirements(tmp_path / "requirements.txt")
+
+    for dep in API_DEPS:
+        assert dep.split(">=")[0] in packages
+
+
+@pytest.mark.unit
 def test_rag_packages_when_enabled(tmp_path, make_config):
     config = make_config(include_rag=True)
     generate_requirements(config, tmp_path)
     packages = _parse_requirements(tmp_path / "requirements.txt")
 
+    assert "tiktoken" in packages
     for dep in RAG_DEPS:
         assert dep.split(">=")[0] in packages
 
 
 @pytest.mark.unit
 def test_rag_packages_absent_when_disabled(tmp_path, make_config):
-    config = make_config(include_rag=False)
+    """Without RAG, tiktoken, embedding, and vector-db deps are all omitted."""
+    config = make_config(include_rag=False, retrieval="custom",
+                         embedding_model="bge-m3", vector_db="chroma")
     generate_requirements(config, tmp_path)
     packages = _parse_requirements(tmp_path / "requirements.txt")
 
-    for dep in RAG_DEPS:
+    assert "tiktoken" not in packages
+    assert "sentence-transformers" not in packages
+    assert "chromadb" not in packages
+
+
+@pytest.mark.unit
+def test_llamaindex_retrieval_packages(tmp_path, make_config):
+    """retrieval='llamaindex' swaps embedding/vector-db deps for llama-index."""
+    config = make_config(include_rag=True, retrieval="llamaindex",
+                         embedding_model="openai-small", vector_db="chroma")
+    generate_requirements(config, tmp_path)
+    packages = _parse_requirements(tmp_path / "requirements.txt")
+
+    assert "llama-index-core" in packages
+    assert "llama-index-embeddings-openai" in packages
+    # LlamaIndex owns embedding + storage — no direct vector-db dep
+    assert "chromadb" not in packages
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("embedding_model", ["bge-m3", "gte-qwen2", "nomic"])
+def test_llamaindex_huggingface_embeddings(tmp_path, make_config, embedding_model):
+    config = make_config(include_rag=True, retrieval="llamaindex",
+                         embedding_model=embedding_model)
+    generate_requirements(config, tmp_path)
+    packages = _parse_requirements(tmp_path / "requirements.txt")
+
+    assert "llama-index-embeddings-huggingface" in packages
+    for dep in LLAMAINDEX_EMBEDDING_DEPS[embedding_model]:
+        assert dep.split(">=")[0] in packages
+    # Direct sentence-transformers dep is only for the custom retrieval option
+    assert "sentence-transformers" not in packages
+
+
+@pytest.mark.unit
+def test_llamaindex_packages_absent_for_custom_retrieval(tmp_path, make_config):
+    config = make_config(include_rag=True, retrieval="custom")
+    generate_requirements(config, tmp_path)
+    packages = _parse_requirements(tmp_path / "requirements.txt")
+
+    for dep in LLAMAINDEX_RETRIEVAL_DEPS:
         assert dep.split(">=")[0] not in packages
 
 
@@ -135,15 +253,6 @@ def test_ml_framework_packages(tmp_path, make_config, ml_framework):
     for dep in ML_FRAMEWORK_DEPS[ml_framework]:
         dep_name = dep.split(">=")[0]
         assert dep_name in packages, f"Missing {dep_name} for {ml_framework}"
-
-
-@pytest.mark.unit
-def test_langchain_llm_integration_packages(tmp_path, make_config):
-    """LangChain + specific LLM should include langchain-<provider> package."""
-    config = make_config(framework="langchain", llm_provider="anthropic")
-    generate_requirements(config, tmp_path)
-    packages = _parse_requirements(tmp_path / "requirements.txt")
-    assert "langchain-anthropic" in packages
 
 
 @pytest.mark.unit

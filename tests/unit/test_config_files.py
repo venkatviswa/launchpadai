@@ -4,8 +4,11 @@ import pytest
 from launchpadai.generators.config_files import generate_config_files
 
 
+LLM_PROVIDERS = ["openai", "anthropic", "ollama"]
+
+
 @pytest.mark.unit
-@pytest.mark.parametrize("llm_provider", ["openai", "anthropic", "google", "ollama", "multiple"])
+@pytest.mark.parametrize("llm_provider", LLM_PROVIDERS)
 def test_env_example_contains_provider_vars(tmp_path, make_config, llm_provider):
     config = make_config(llm_provider=llm_provider)
     (tmp_path / "docs").mkdir(parents=True)
@@ -16,10 +19,24 @@ def test_env_example_contains_provider_vars(tmp_path, make_config, llm_provider)
         assert "OPENAI_API_KEY" in content
     elif llm_provider == "anthropic":
         assert "ANTHROPIC_API_KEY" in content
+    elif llm_provider == "ollama":
+        assert "OLLAMA_BASE_URL" in content
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("llm_provider", ["openai", "anthropic", "google", "ollama", "multiple"])
+def test_env_example_has_no_removed_option_vars(tmp_path, make_config):
+    """google/multiple providers and cohere/weaviate/qdrant/pgvector are gone."""
+    config = make_config()
+    (tmp_path / "docs").mkdir(parents=True)
+    generate_config_files(config, tmp_path)
+
+    content = (tmp_path / ".env.example").read_text().upper()
+    for removed in ["GOOGLE", "GEMINI", "COHERE", "WEAVIATE", "QDRANT", "PGVECTOR", "POSTGRES"]:
+        assert removed not in content, f"Removed option '{removed}' still in .env.example"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("llm_provider", LLM_PROVIDERS)
 def test_settings_py_valid_python(tmp_path, make_config, llm_provider):
     config = make_config(llm_provider=llm_provider)
     (tmp_path / "docs").mkdir(parents=True)
@@ -27,6 +44,29 @@ def test_settings_py_valid_python(tmp_path, make_config, llm_provider):
 
     content = (tmp_path / "config" / "settings.py").read_text()
     ast.parse(content)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("llm_provider", LLM_PROVIDERS)
+def test_settings_llm_model_env_overridable(tmp_path, make_config, llm_provider):
+    """LLM_MODEL comes from os.getenv with a provider-specific default."""
+    config = make_config(llm_provider=llm_provider)
+    (tmp_path / "docs").mkdir(parents=True)
+    generate_config_files(config, tmp_path)
+
+    content = (tmp_path / "config" / "settings.py").read_text()
+    assert 'LLM_MODEL = os.getenv("LLM_MODEL"' in content
+
+
+@pytest.mark.unit
+def test_agentscript_env_vars(tmp_path, make_config):
+    config = make_config(framework="agentscript")
+    (tmp_path / "docs").mkdir(parents=True)
+    generate_config_files(config, tmp_path)
+
+    content = (tmp_path / ".env.example").read_text()
+    assert "SF_INSTANCE_URL" in content
+    assert "SF_CLIENT_ID" in content
 
 
 @pytest.mark.unit

@@ -4,8 +4,8 @@ import pytest
 from launchpadai.generators.models_layer import generate_models_layer
 
 
-LLM_PROVIDERS = ["openai", "anthropic", "google", "ollama", "multiple"]
-EMBEDDING_MODELS = ["openai-small", "openai-large", "cohere", "bge-m3", "gte-qwen2", "nomic", "ollama"]
+LLM_PROVIDERS = ["openai", "anthropic", "ollama"]
+EMBEDDING_MODELS = ["openai-small", "openai-large", "bge-m3", "gte-qwen2", "nomic"]
 
 
 @pytest.mark.unit
@@ -53,13 +53,13 @@ def test_anthropic_llm_uses_correct_sdk(tmp_path, make_config):
 
 
 @pytest.mark.unit
-def test_stub_providers_raise_not_implemented(tmp_path, make_config):
-    for provider in ["google", "multiple"]:
-        config = make_config(llm_provider=provider)
-        generate_models_layer(config, tmp_path)
+def test_ollama_llm_uses_correct_sdk(tmp_path, make_config):
+    config = make_config(llm_provider="ollama")
+    generate_models_layer(config, tmp_path)
 
-        content = (tmp_path / "models" / "llm" / "provider.py").read_text()
-        assert "NotImplementedError" in content
+    content = (tmp_path / "models" / "llm" / "provider.py").read_text()
+    assert "import ollama" in content
+    assert "ollama.chat" in content
 
 
 @pytest.mark.unit
