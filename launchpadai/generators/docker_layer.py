@@ -9,6 +9,7 @@ def generate_docker_layer(config: dict, project_path: Path):
     services = {
         "chroma": '''
   chroma:
+    # Pin to a specific version for reproducible builds, e.g. chromadb/chroma:0.5.23
     image: chromadb/chroma:latest
     ports:
       - "8001:8000"
@@ -81,7 +82,7 @@ volumes:
     _write(project_path / "docker-compose.yml", compose)
 
     # Dockerfile
-    dockerfile = f'''FROM python:3.12-slim
+    dockerfile = '''FROM python:3.12-slim
 
 WORKDIR /app
 

@@ -29,7 +29,9 @@ class AgentSpec(BaseModel):
 class ProjectConfig(BaseModel):
     """Validated project configuration gathered from the wizard or CLI flags."""
 
-    project_name: str = Field(..., min_length=1)
+    # Strict slug: the name is interpolated into generated source files and
+    # filesystem paths, so no separators, quotes, or control characters.
+    project_name: str = Field(..., pattern=r"^[a-z][a-z0-9-]{0,62}$")
     framework: str = "plain"  # validated against the adapter registry at generation time
     llm_provider: Literal["openai", "anthropic", "ollama"] = "anthropic"
     embedding_model: Literal[

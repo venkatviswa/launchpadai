@@ -60,7 +60,7 @@ def test_pairwise_generation(tmp_path, config):
     # 4. requirements.txt must exist with packages
     req_file = project_path / "requirements.txt"
     assert req_file.exists()
-    packages = [l for l in req_file.read_text().split("\n") if l.strip() and not l.startswith("#")]
+    packages = [line for line in req_file.read_text().split("\n") if line.strip() and not line.startswith("#")]
     assert len(packages) >= 2, "requirements.txt should have at least base deps"
 
     # 5. launchpad.yaml must exist

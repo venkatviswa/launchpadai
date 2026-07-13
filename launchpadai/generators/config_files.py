@@ -35,7 +35,7 @@ def generate_config_files(config: dict, project_path: Path):
     # .env.example
     env_lines = [
         f"# LaunchpadAI Project: {config['project_name']}",
-        f"# Generated configuration\n",
+        "# Generated configuration\n",
         "# === LLM Provider ===",
         ENV_VARS.get(config["llm_provider"], ""),
         "# LLM_MOCK=1   # offline mode: deterministic mock LLM, no API keys needed",
@@ -231,9 +231,12 @@ node_modules/
 
 ```bash
 # 1. Install dependencies
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt
 
-# 2. Configure environment
+# 2. Run the generated tests (offline, no API keys needed)
+pytest tests
+
+# 3. Configure environment
 cp .env.example .env
 # Edit .env with your API keys
 """

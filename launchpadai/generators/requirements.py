@@ -6,8 +6,13 @@ from pathlib import Path
 BASE_DEPS = [
     "python-dotenv>=1.0.0",
     "pyyaml>=6.0",
-    # The generated tests/ suite runs offline against the mock LLM provider
+]
+
+# Development-only dependencies (requirements-dev.txt) — the generated tests/
+# suite runs offline against the mock LLM provider
+DEV_DEPS = [
     "pytest>=8.0.0",
+    "httpx>=0.27.0",  # fastapi.testclient
 ]
 
 LLM_DEPS = {
@@ -205,3 +210,12 @@ def generate_requirements(config: dict, project_path: Path):
 
     with open(project_path / "requirements.txt", "w") as f:
         f.write(req_content)
+
+    with open(project_path / "requirements-dev.txt", "w") as f:
+        f.write(
+            "# Development dependencies — run the generated tests with:\n"
+            "#   pip install -r requirements.txt -r requirements-dev.txt\n"
+            "#   pytest tests\n\n"
+            + "\n".join(DEV_DEPS)
+            + "\n"
+        )

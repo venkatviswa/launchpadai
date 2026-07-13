@@ -85,7 +85,7 @@ def test_maximal_config(tmp_path, make_config):
                 ast.parse(content)
             except SyntaxError as e:
                 errors.append(f"{py_file.relative_to(project_path)}: {e}")
-    assert not errors, f"Syntax errors:\n" + "\n".join(errors)
+    assert not errors, "Syntax errors:\n" + "\n".join(errors)
 
     # All YAML files must parse (incl. docker-compose.yml)
     for pattern in ("*.yaml", "*.yml"):
@@ -136,8 +136,8 @@ def test_agentscript_rejects_multi_agent_orchestration(tmp_path, make_config, or
 
 @pytest.mark.integration
 def test_special_characters_in_project_name(tmp_path, make_config):
-    """Project names with hyphens and numbers should work."""
-    for name in ["my-ai-agent-2024", "test_project", "a"]:
+    """Slug names generate; unsafe names are rejected by the config model."""
+    for name in ["my-ai-agent-2024", "a", "agent-2"]:
         config = make_config(project_name=name)
         project_path = tmp_path / name
         project_path.mkdir()
@@ -147,6 +147,12 @@ def test_special_characters_in_project_name(tmp_path, make_config):
             content = py_file.read_text()
             if content.strip():
                 ast.parse(content)
+
+    # The name is interpolated into generated code and paths, so anything
+    # outside the strict slug pattern must be rejected outright.
+    for bad in ["test_project", "../escape", "/absolute", 'quote"name', "Name", "9starts-digit", "a" * 64]:
+        with pytest.raises(ValueError):
+            make_config(project_name=bad)
 
 
 @pytest.mark.integration

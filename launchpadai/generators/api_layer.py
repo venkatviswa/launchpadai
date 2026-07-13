@@ -2,7 +2,7 @@
 from pathlib import Path
 
 
-def generate_api_layer(config: dict, project_path: Path):
+def generate_api_layer(config, project_path: Path):
     base = project_path / "api"
     _write(base / "__init__.py", "")
 
@@ -10,16 +10,30 @@ def generate_api_layer(config: dict, project_path: Path):
     agent_import = "from agents import agent"
     agent_call = 'agent.run(request.message, session_id=request.session_id)'
 
+    # Token auth wires into the API for the env-var-backed modes. OAuth is
+    # handled by the Next.js frontend (NextAuth), not the API layer.
+    auth_enabled = config.get("auth", "none") in ("simple", "multi_user")
+    auth_imports = ""
+    auth_router = ""
+    chat_auth_param = ""
+    if auth_enabled:
+        auth_imports = (
+            "from auth.middleware import require_auth\n"
+            "from auth.routes import router as auth_router\n"
+        )
+        auth_router = "\n# Login/logout endpoints (/auth/login is always open)\napp.include_router(auth_router)\n"
+        chat_auth_param = ", user: dict = Depends(require_auth)"
+
+    fastapi_imports = "Depends, FastAPI, Request" if auth_enabled else "FastAPI, Request"
+
     _write(base / "routes.py", f'''"""FastAPI routes — HTTP API for the agent."""
 import os
-from fastapi import FastAPI, Request
+from fastapi import {fastapi_imports}
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
-from typing import Optional
 
+from api.schemas import ChatRequest, ChatResponse
 {agent_import}
-
+{auth_imports}
 app = FastAPI(title="{config['project_name']} API", version="0.1.0")
 
 # CORS — restrict origins for security
@@ -35,7 +49,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-
+{auth_router}
 # --- Security headers middleware ---
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
@@ -48,18 +62,8 @@ async def add_security_headers(request: Request, call_next):
     return response
 
 
-class ChatRequest(BaseModel):
-    message: str = Field(..., min_length=1, max_length=10000, description="User message")
-    session_id: Optional[str] = Field("default", max_length=128)
-
-
-class ChatResponse(BaseModel):
-    response: str
-    session_id: str
-
-
 @app.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest{chat_auth_param}):
     """Send a message to the agent."""
     result = {agent_call}
     return ChatResponse(
@@ -73,14 +77,19 @@ async def health():
     return {{"status": "ok", "project": "{config['project_name']}"}}
 ''')
 
-    _write(base / "schemas.py", '''"""Pydantic schemas for API request/response models."""
-from pydantic import BaseModel
+    _write(base / "schemas.py", '''"""Pydantic schemas for API request/response models.
+
+Single source of truth — api/routes.py imports these; keep validation
+constraints here so every consumer gets them.
+"""
 from typing import Optional
+
+from pydantic import BaseModel, Field
 
 
 class ChatRequest(BaseModel):
-    message: str
-    session_id: Optional[str] = "default"
+    message: str = Field(..., min_length=1, max_length=10000, description="User message")
+    session_id: Optional[str] = Field("default", max_length=128)
     context: Optional[dict] = None
 
 

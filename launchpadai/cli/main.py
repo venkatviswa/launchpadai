@@ -1,12 +1,15 @@
 """LaunchpadAI CLI — The Spring Initializr for Agentic AI Applications."""
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt, Confirm
 from rich.table import Table
-from pathlib import Path
-import subprocess
-import sys
 
 from launchpadai.cli.prompts import gather_project_config
 from launchpadai.config import AgentSpec, ProjectConfig
@@ -70,7 +73,7 @@ def init(
     agent: list[str] = typer.Option(None, "--agent", help='Agent spec "name:role:goal" (repeat for multi-agent)'),
     orchestration: str = typer.Option(None, "--orchestration", help="Multi-agent orchestration: single, sequential, supervisor"),
     defaults: bool = typer.Option(False, "--defaults", "-y", help="Non-interactive: use defaults for anything not passed as a flag"),
-    force: bool = typer.Option(False, "--force", help="Overwrite an existing directory without prompting"),
+    force: bool = typer.Option(False, "--force", help="Replace an existing LaunchpadAI project directory (deletes it, then regenerates)"),
 ):
     """Create a new agentic AI project (interactive wizard, or fully via flags)."""
     overrides = {
@@ -114,21 +117,45 @@ def init(
                 default="my-ai-agent",
             )
 
-    # Validate project name
+    # Validate project name — strict slug because the name is embedded in
+    # generated source files and filesystem paths.
     project_name = project_name.strip().replace(" ", "-").lower()
+    if not re.fullmatch(r"[a-z][a-z0-9-]{0,62}", project_name):
+        console.print(
+            f"[red]Invalid project name '{project_name}'.[/] "
+            "Use lowercase letters, digits, and hyphens, starting with a letter "
+            "(max 63 characters)."
+        )
+        raise typer.Exit(1)
     project_path = Path(output_dir) / project_name
 
-    if project_path.exists() and not force:
-        if non_interactive:
-            console.print(f"[red]Directory '{project_name}' already exists. Use --force to overwrite.[/]")
+    if project_path.exists():
+        if not force:
+            if non_interactive:
+                console.print(
+                    f"[red]Directory '{project_name}' already exists. "
+                    "Use --force to replace it.[/]"
+                )
+                raise typer.Exit(1)
+            overwrite = Confirm.ask(
+                f"[yellow]Directory '{project_name}' already exists. "
+                "Delete it and regenerate?[/]",
+                default=False,
+            )
+            if not overwrite:
+                console.print("[red]Aborted.[/]")
+                raise typer.Exit(1)
+
+        # Clean regeneration — leftover files from a previous generation must
+        # not survive (they would no longer match launchpad.yaml). Only ever
+        # delete directories that are LaunchpadAI projects.
+        if any(project_path.iterdir()) and not (project_path / "launchpad.yaml").exists():
+            console.print(
+                f"[red]'{project_path}' is not empty and has no launchpad.yaml — "
+                "refusing to delete it. Remove it manually if you really want to.[/]"
+            )
             raise typer.Exit(1)
-        overwrite = Confirm.ask(
-            f"[yellow]Directory '{project_name}' already exists. Overwrite?[/]",
-            default=False,
-        )
-        if not overwrite:
-            console.print("[red]Aborted.[/]")
-            raise typer.Exit(1)
+        shutil.rmtree(project_path)
 
     if non_interactive:
         try:
@@ -192,28 +219,27 @@ def run(
         console.print(f"  [dim]cp {project_path}/.env.example {project_path}/.env[/]")
         raise typer.Exit(1)
 
-    # Install dependencies if needed
-    req_file = project_path / "requirements.txt"
-    if req_file.exists():
-        console.print("[dim]Checking dependencies...[/]")
-        subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-r", str(req_file), "-q"],
-            cwd=str(project_path),
-        )
+    # Dependencies are installed explicitly, never as a side effect of run:
+    #   pip install -r requirements.txt
+    console.print("[dim]If startup fails with ImportError: pip install -r requirements.txt[/]")
 
-    # Launch based on UI type
+    # Launch based on UI type; propagate the process's exit code
     if ui == "streamlit":
         console.print("[green]Launching Streamlit UI...[/]")
-        subprocess.run(
+        result = subprocess.run(
             [sys.executable, "-m", "streamlit", "run", "ui/app.py", "--server.port=8501"],
             cwd=str(project_path),
         )
+        if result.returncode:
+            raise typer.Exit(result.returncode)
     elif ui == "gradio":
         console.print("[green]Launching Gradio UI...[/]")
-        subprocess.run(
+        result = subprocess.run(
             [sys.executable, "ui/app.py"],
             cwd=str(project_path),
         )
+        if result.returncode:
+            raise typer.Exit(result.returncode)
     elif ui == "nextjs":
         console.print("[green]Launching FastAPI backend + Next.js frontend...[/]")
         console.print("[dim]Starting API server on :8000...[/]")
@@ -231,10 +257,24 @@ def run(
     else:
         # No UI — run as CLI
         console.print("[green]Running agent in CLI mode...[/]")
-        subprocess.run(
+        result = subprocess.run(
             [sys.executable, "-m", "agents.cli_runner"],
             cwd=str(project_path),
         )
+        if result.returncode:
+            raise typer.Exit(result.returncode)
+
+
+def _require_project(project_dir: str) -> Path:
+    """Resolve and validate a LaunchpadAI project directory."""
+    project_path = Path(project_dir)
+    if not (project_path / "launchpad.yaml").exists():
+        console.print(
+            f"[red]Error: '{project_path}' is not a LaunchpadAI project "
+            "(no launchpad.yaml). Run 'launchpad init' first.[/]"
+        )
+        raise typer.Exit(1)
+    return project_path
 
 
 @app.command()
@@ -243,12 +283,14 @@ def ingest(
     source: str = typer.Option(None, "--source", "-s", help="Path to documents to ingest"),
 ):
     """Ingest documents into the vector store."""
-    project_path = Path(project_dir)
+    project_path = _require_project(project_dir)
     console.print(Panel("[bold cyan]LaunchpadAI Document Ingestion[/]", expand=False))
-    subprocess.run(
+    result = subprocess.run(
         [sys.executable, "scripts/ingest.py"] + (["--source", source] if source else []),
         cwd=str(project_path),
     )
+    if result.returncode:
+        raise typer.Exit(result.returncode)
 
 
 @app.command()
@@ -256,12 +298,14 @@ def evaluate(
     project_dir: str = typer.Argument(".", help="Path to the LaunchpadAI project"),
 ):
     """Run evaluation suite against the agent."""
-    project_path = Path(project_dir)
+    project_path = _require_project(project_dir)
     console.print(Panel("[bold cyan]LaunchpadAI Agent Evaluation[/]", expand=False))
-    subprocess.run(
+    result = subprocess.run(
         [sys.executable, "eval/run_eval.py"],
         cwd=str(project_path),
     )
+    if result.returncode:
+        raise typer.Exit(result.returncode)
 
 
 def _show_summary(config):
@@ -298,8 +342,9 @@ def _show_next_steps(config: dict, project_path: Path):
     """Show post-generation instructions."""
     steps = [
         f"cd {project_path}",
-        "cp .env.example .env          # Add your API keys",
-        "pip install -r requirements.txt",
+        "pip install -r requirements.txt -r requirements-dev.txt",
+        "pytest tests                   # Runs offline against the mock LLM",
+        "cp .env.example .env           # Add your API keys",
     ]
 
     if config["include_rag"]:

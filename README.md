@@ -4,7 +4,7 @@
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-LaunchpadAI is an interactive CLI that scaffolds runnable, multi-agent AI projects in seconds. Answer a few questions (or pass a few flags) and get a working, well-architected project — ready to customize and deploy.
+LaunchpadAI is an interactive CLI that scaffolds runnable, multi-agent AI projects in seconds. Answer a few questions (or pass a few flags) and get a working, well-architected, production-oriented foundation — ready for customization and hardening.
 
 **Quick links:** [Quick Start](#quick-start) · [CLI Commands](#cli-commands) · [Multi-Agent Teams](#multi-agent-teams) · [Configuration Options](#configuration-options) · [Project Structure](#generated-project-structure) · [Development](#development)
 
@@ -66,7 +66,7 @@ launchpad init research-crew \
 
 ```bash
 cd my-agent
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt
 pytest tests            # runs offline against the mock LLM — no keys needed
 cp .env.example .env    # add your API keys (or set LLM_MOCK=1 to stay offline)
 launchpad run
@@ -258,7 +258,7 @@ Every generated project follows this shape regardless of framework — only the 
 
 The CLI is built around a small plugin architecture:
 
-- `launchpadai/config.py` — `ProjectConfig` / `AgentSpec` (Pydantic v2): every option is validated before generation
+- `launchpadai/config.py` — `ProjectConfig` / `AgentSpec` (Pydantic v2): option values, the project-name slug, and cross-field rules are validated before generation; framework-specific rules live in the adapter registry
 - `launchpadai/frameworks/` — one adapter module per framework, each exposing a frozen `FrameworkAdapter` and a `generate()` hook; `registry.py` is the single registry that CLI choices and generation dispatch derive from
 - `launchpadai/generators/` — framework-agnostic layer generators (API, guardrails, memory, knowledge, ...)
 

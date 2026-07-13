@@ -48,10 +48,13 @@ class TestMockProviderGeneration:
         generate_config_files(config, tmp_path)
         assert "LLM_MOCK=1" in (tmp_path / ".env.example").read_text()
 
-    def test_pytest_in_generated_requirements(self, make_config, tmp_path):
+    def test_dev_requirements_generated(self, make_config, tmp_path):
         config = make_config()
         generate_requirements(config, tmp_path)
-        assert "pytest" in (tmp_path / "requirements.txt").read_text()
+        assert "pytest" not in (tmp_path / "requirements.txt").read_text()
+        dev = (tmp_path / "requirements-dev.txt").read_text()
+        assert "pytest" in dev
+        assert "httpx" in dev
 
 
 class TestTestsLayerGeneration:

@@ -1,9 +1,8 @@
 """Shared test fixtures for LaunchpadAI test suite."""
 import pytest
-from pathlib import Path
 from allpairspy import AllPairs
 
-from launchpadai.config import AgentSpec, ProjectConfig
+from launchpadai.config import ProjectConfig
 from launchpadai.generators.project import ProjectGenerator
 
 

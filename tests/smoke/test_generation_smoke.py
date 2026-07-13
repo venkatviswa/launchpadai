@@ -45,6 +45,9 @@ CASES = {
         "agents": MULTI_AGENTS,
         "orchestration": "supervisor",
     },
+    # Exercises the generated auth wiring end to end: /auth/login flow and
+    # 401 on unauthenticated /chat, via the generated test_api.py.
+    "plain-auth": {"framework": "plain", "ui": "streamlit", "auth": "simple"},
     "langgraph": {
         "framework": "langgraph",
         "agents": MULTI_AGENTS,
@@ -77,7 +80,11 @@ def test_render_install_import(tmp_path, case):
     py = str(venv_dir / bin_dir / "python")
 
     install = subprocess.run(
-        [py, "-m", "pip", "install", "-q", "-r", str(project / "requirements.txt")],
+        [
+            py, "-m", "pip", "install", "-q",
+            "-r", str(project / "requirements.txt"),
+            "-r", str(project / "requirements-dev.txt"),
+        ],
         capture_output=True,
         text=True,
         timeout=900,

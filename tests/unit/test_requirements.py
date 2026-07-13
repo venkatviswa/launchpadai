@@ -3,8 +3,7 @@ import pytest
 from launchpadai.generators.requirements import (
     generate_requirements,
     LLM_DEPS, FRAMEWORK_DEPS, EMBEDDING_DEPS, VECTORDB_DEPS,
-    OBSERVABILITY_DEPS, UI_DEPS, ML_FRAMEWORK_DEPS, DATA_FORMAT_DEPS,
-    BASE_DEPS, RAG_DEPS, GUARDRAIL_DEPS, MCP_DEPS, API_DEPS,
+    OBSERVABILITY_DEPS, UI_DEPS, ML_FRAMEWORK_DEPS, BASE_DEPS, RAG_DEPS, API_DEPS,
     LANGGRAPH_LLM_DEPS, LLAMAINDEX_RETRIEVAL_DEPS, LLAMAINDEX_EMBEDDING_DEPS,
 )
 
@@ -267,8 +266,8 @@ def test_no_duplicate_packages(tmp_path, make_config):
     generate_requirements(config, tmp_path)
 
     content = (tmp_path / "requirements.txt").read_text()
-    lines = [l.strip() for l in content.split("\n") if l.strip() and not l.startswith("#")]
-    names = [l.split(">=")[0] for l in lines]
+    lines = [line.strip() for line in content.split("\n") if line.strip() and not line.startswith("#")]
+    names = [line.split(">=")[0] for line in lines]
     assert len(names) == len(set(names)), f"Duplicates: {[n for n in names if names.count(n) > 1]}"
 
 

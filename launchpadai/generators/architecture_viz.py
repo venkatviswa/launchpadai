@@ -78,7 +78,7 @@ def generate_architecture_diagram(config: dict) -> str:
     if config.get("ui", "none") != "none":
         lines.append(f'        USER(["👤 User"]) --> UI["{ui}"]')
     else:
-        lines.append(f'        USER(["👤 User"]) --> CLI["CLI Interface"]')
+        lines.append('        USER(["👤 User"]) --> CLI["CLI Interface"]')
     lines.append("    end")
     lines.append("")
 
@@ -89,7 +89,7 @@ def generate_architecture_diagram(config: dict) -> str:
             lines.append(f'    UI --> AUTH{{"🔐 {auth_name}"}}')
         else:
             lines.append(f'    CLI --> AUTH{{"🔐 {auth_name}"}}')
-        lines.append(f'    AUTH --> API["⚡ FastAPI"]')
+        lines.append('    AUTH --> API["⚡ FastAPI"]')
     else:
         if config.get("ui", "none") != "none":
             lines.append('    UI --> API["⚡ FastAPI"]')
@@ -236,21 +236,21 @@ def generate_stack_summary(config: dict) -> str:
 
     sections = []
 
-    sections.append(f"| Layer | Technology | Purpose |")
-    sections.append(f"|-------|-----------|---------|")
+    sections.append("| Layer | Technology | Purpose |")
+    sections.append("|-------|-----------|---------|")
     sections.append(f"| **Framework** | {_dn(config['framework'])} | Agent orchestration and reasoning loop |")
     sections.append(f"| **LLM** | {_dn(config['llm_provider'])} | Language model for reasoning and generation |")
     sections.append(f"| **Embeddings** | {_dn(config['embedding_model'])} | Text-to-vector conversion for similarity search |")
     sections.append(f"| **Vector DB** | {_dn(config['vector_db'])} | Stores and searches document embeddings |")
 
     if config.get("include_rag"):
-        sections.append(f"| **RAG Pipeline** | Custom | Document ingestion, chunking, and retrieval |")
+        sections.append("| **RAG Pipeline** | Custom | Document ingestion, chunking, and retrieval |")
 
     if config.get("include_guardrails"):
-        sections.append(f"| **Guardrails** | Presidio + Custom | Input/output safety and PII detection |")
+        sections.append("| **Guardrails** | Presidio + Custom | Input/output safety and PII detection |")
 
     if config.get("include_mcp"):
-        sections.append(f"| **Tools** | MCP + Custom | External API and service integrations |")
+        sections.append("| **Tools** | MCP + Custom | External API and service integrations |")
 
     if config.get("include_ml_pipeline"):
         sections.append(f"| **ML Pipeline** | {_dn(config.get('ml_framework', 'sklearn'))} | Model training, inference, and registry |")
@@ -270,13 +270,13 @@ def generate_stack_summary(config: dict) -> str:
         sections.append(f"| **Auth** | {_dn(auth)} | Authentication for UI and API |")
 
     if config.get("include_docker"):
-        sections.append(f"| **Deployment** | Docker + Compose | Containerized deployment |")
+        sections.append("| **Deployment** | Docker + Compose | Containerized deployment |")
 
     if config.get("include_eval"):
-        sections.append(f"| **Evaluation** | Custom | Test cases and quality metrics |")
+        sections.append("| **Evaluation** | Custom | Test cases and quality metrics |")
 
     if config.get("include_notebooks"):
-        sections.append(f"| **Notebooks** | Jupyter | EDA, experiments, and analysis |")
+        sections.append("| **Notebooks** | Jupyter | EDA, experiments, and analysis |")
 
     return "\n".join(sections)
 

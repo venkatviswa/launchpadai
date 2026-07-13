@@ -140,9 +140,9 @@ def test_langfuse_pinned_below_v3(tmp_path, make_config):
     content = (project_path / "requirements.txt").read_text()
 
     langfuse_lines = [
-        l for l in content.splitlines()
-        if l.strip().startswith("langfuse")
+        line for line in content.splitlines()
+        if line.strip().startswith("langfuse")
     ]
     assert langfuse_lines, "langfuse dep missing"
-    assert any("<3.0.0" in l for l in langfuse_lines), \
+    assert any("<3.0.0" in line for line in langfuse_lines), \
         f"langfuse must be pinned <3.0.0, got: {langfuse_lines}"

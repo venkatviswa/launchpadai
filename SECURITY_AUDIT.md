@@ -8,7 +8,9 @@
 
 ## Executive Summary
 
-LaunchpadAI is a CLI scaffolding tool that generates production-ready agentic AI applications. This audit reviews both the tool itself and the **generated code templates** it produces, since vulnerabilities in templates propagate to every generated project.
+LaunchpadAI is a CLI scaffolding tool that generates runnable, production-oriented agentic AI foundations intended for customization and hardening. This audit reviews both the tool itself and the **generated code templates** it produces, since vulnerabilities in templates propagate to every generated project.
+
+> **Update (2026-07):** API authentication is now wired end-to-end — when `auth=simple` or `auth=multi_user` is selected, the generated `api/routes.py` includes the auth router and protects `/chat` with `require_auth`, verified by generated tests (401 without a token). CI runs `ruff` and `pip-audit` on every push. Still open: API rate limiting (#12) and structured logging (#13). Auth remains env-var/in-memory by design — replace with a real identity provider before multi-replica production use.
 
 **Findings:** 14 security issues identified (2 Critical, 3 High, 7 Medium, 2 Low).
 **Fixes Applied:** 11 issues fixed in this audit (see summary table). Remaining items documented as recommendations.

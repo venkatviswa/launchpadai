@@ -6,6 +6,30 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    name: Ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+      - name: Ruff check
+        run: uvx ruff check .
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+      - name: pip-audit against locked dependencies
+        run: |
+          uv export --format requirements-txt --no-emit-project > requirements-ci.txt
+          uvx pip-audit -r requirements-ci.txt
+
   tests:
     name: Unit / integration / validation
     runs-on: ubuntu-latest

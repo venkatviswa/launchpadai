@@ -16,12 +16,19 @@ def generate_tests_layer(config, project_path: Path):
     _write(base / "__init__.py", "")
     _write(base / "conftest.py", _conftest(config))
     _write(base / "test_agent.py", _test_agent(config))
+    _write(base / "test_api.py", _test_api(config))
     if config["include_guardrails"]:
         _write(base / "test_guardrails.py", _TEST_GUARDRAILS)
 
 
 def _conftest(config) -> str:
-    return '''"""Test configuration — the suite runs fully offline.
+    auth_env = ""
+    if config["auth"] == "simple":
+        auth_env = '\nos.environ.setdefault("APP_PASSWORD", "test-password")'
+    elif config["auth"] == "multi_user":
+        auth_env = '\nos.environ.setdefault("APP_USERS", "tester:test-password")'
+
+    return f'''"""Test configuration — the suite runs fully offline.
 
 LLM_MOCK=1 swaps the real LLM for models/llm/mock.py before anything imports
 the provider. The dummy keys let SDK clients construct without real
@@ -36,7 +43,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 os.environ.setdefault("LLM_MOCK", "1")
 os.environ.setdefault("OPENAI_API_KEY", "sk-mock-offline")
 os.environ.setdefault("ANTHROPIC_API_KEY", "sk-ant-mock-offline")
-os.environ.setdefault("PINECONE_API_KEY", "mock-offline")
+os.environ.setdefault("PINECONE_API_KEY", "mock-offline"){auth_env}
 
 import pytest  # noqa: E402
 
@@ -177,6 +184,86 @@ def test_conversation_memory_offline():
 '''
 
     return header + guardrail_tests + mock_loop_tests
+
+
+def _test_api(config) -> str:
+    header = '''"""API tests — FastAPI routes exercised in-process with TestClient."""
+import agents
+from fastapi.testclient import TestClient
+
+from api.routes import app
+
+client = TestClient(app)
+
+
+def test_health():
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+
+
+def test_chat_rejects_empty_message():
+    response = client.post("/chat", json={"message": "", "session_id": "api"})
+    assert response.status_code == 422
+'''
+
+    if config["auth"] not in ("simple", "multi_user"):
+        return header + '''
+
+def test_chat_returns_agent_response(monkeypatch):
+    monkeypatch.setattr(agents, "_traced_run", lambda msg, sid: {"response": "api stub"})
+
+    response = client.post("/chat", json={"message": "hi", "session_id": "api"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["response"] == "api stub"
+    assert body["session_id"] == "api"
+'''
+
+    login_payload = (
+        '{"password": "test-password"}'
+        if config["auth"] == "simple"
+        else '{"username": "tester", "password": "test-password"}'
+    )
+    return header + f'''
+
+def _login_token() -> str:
+    response = client.post("/auth/login", json={login_payload})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["authenticated"] is True, body
+    return body["token"]
+
+
+def test_chat_requires_auth():
+    """Without a token, /chat must be rejected — not silently open."""
+    response = client.post("/chat", json={{"message": "hi", "session_id": "api"}})
+    assert response.status_code == 401
+
+
+def test_chat_rejects_bad_token():
+    response = client.post(
+        "/chat",
+        json={{"message": "hi", "session_id": "api"}},
+        headers={{"Authorization": "Bearer not-a-real-token"}},
+    )
+    assert response.status_code == 401
+
+
+def test_login_then_chat(monkeypatch):
+    monkeypatch.setattr(agents, "_traced_run", lambda msg, sid: {{"response": "api stub"}})
+
+    token = _login_token()
+    response = client.post(
+        "/chat",
+        json={{"message": "hi", "session_id": "api"}},
+        headers={{"Authorization": f"Bearer {{token}}"}},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["response"] == "api stub"
+'''
 
 
 _TEST_GUARDRAILS = '''"""Guardrail unit tests — pure functions, no LLM involved."""
