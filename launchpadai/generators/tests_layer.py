@@ -200,15 +200,15 @@ def test_health():
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
-
-
-def test_chat_rejects_empty_message():
-    response = client.post("/chat", json={"message": "", "session_id": "api"})
-    assert response.status_code == 422
 '''
 
     if config["auth"] not in ("simple", "multi_user"):
         return header + '''
+
+def test_chat_rejects_empty_message():
+    response = client.post("/chat", json={"message": "", "session_id": "api"})
+    assert response.status_code == 422
+
 
 def test_chat_returns_agent_response(monkeypatch):
     monkeypatch.setattr(agents, "_traced_run", lambda msg, sid: {"response": "api stub"})
@@ -249,6 +249,17 @@ def test_chat_rejects_bad_token():
         headers={{"Authorization": "Bearer not-a-real-token"}},
     )
     assert response.status_code == 401
+
+
+def test_chat_rejects_empty_message():
+    """Auth runs before body validation, so validation needs a valid token."""
+    token = _login_token()
+    response = client.post(
+        "/chat",
+        json={{"message": "", "session_id": "api"}},
+        headers={{"Authorization": f"Bearer {{token}}"}},
+    )
+    assert response.status_code == 422
 
 
 def test_login_then_chat(monkeypatch):
