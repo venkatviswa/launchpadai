@@ -93,7 +93,7 @@ Key flags (see `launchpad init --help` for all):
 | `--observability` | `langfuse`, `langsmith`, `opentelemetry`, `none` |
 | `--ui` | `streamlit`, `gradio`, `nextjs`, `none` |
 | `--defaults, -y` | Use defaults for anything not passed |
-| `--force` | Overwrite an existing directory |
+| `--force` | Clean regeneration: delete and rebuild an existing LaunchpadAI project dir (refuses non-LaunchpadAI dirs) |
 
 After generation, a `launchpad.yaml` file saves your configuration for reproducibility.
 
@@ -226,13 +226,15 @@ my-ai-agent/
 ├── observability/       # Tracing + cost tracking (if enabled)
 ├── prompts/             # Project-level prompts and few-shot examples
 ├── scripts/             # Utility scripts (ingestion, etc.)
+├── tests/               # Generated test suite — runs offline via the mock LLM
 ├── tools/               # Shared tool registry and MCP servers
 ├── ui/                  # Chat interface (if enabled)
 ├── .env.example         # Environment variable template
 ├── docker-compose.yml   # Container orchestration (if enabled)
 ├── Dockerfile
 ├── launchpad.yaml       # Project configuration (reproducible)
-└── requirements.txt
+├── requirements.txt     # Runtime dependencies
+└── requirements-dev.txt # Test dependencies (pytest, httpx)
 ```
 
 Only the layers you enable are generated. **AgentScript projects** additionally generate `force-app/main/aiAuthoringBundles/` (`.agent` DSL) and `sfdx-project.json`.

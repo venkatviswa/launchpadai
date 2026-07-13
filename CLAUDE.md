@@ -45,7 +45,15 @@ Define success criteria. Loop until verified.
   - "Add validation" → write tests for invalid inputs, make them pass.
   - "Fix the bug" → write a failing test that reproduces it, make it pass.
   - "Refactor X" → tests green before AND after.
-- For multi-step work, state a short plan where each step has an explicit verification check, then execute the loop independently.
+- For multi-step work, state a brief plan where each step has an explicit verification check, then execute the loop independently:
+
+  ```
+  1. [Step] → verify: [check]
+  2. [Step] → verify: [check]
+  3. [Step] → verify: [check]
+  ```
+
+- Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
 ---
 
@@ -65,7 +73,7 @@ Configuration crossing a boundary MUST be a Pydantic v2 model — no bare dicts 
 - **Generation is programmatic:** generators under `launchpadai/generators/` write files as Python string templates (no Copier/Jinja on disk). Keep generated code readable — it is the user's starting codebase, not throwaway output.
 - **Generated projects must be runnable out of the box** — agent with one example tool, uniform entrypoint, passing imports, and a generated pytest suite that passes offline against the mock LLM provider (`LLM_MOCK=1`, `models/llm/mock.py`). Never empty skeletons, and never `NotImplementedError` stubs behind a wizard option: if an option is offered, its generated code must work.
 - **Generated structure:** vertical slice per agent (`agents/<name>/` with `prompts/system.md` and `tools.py`), plus a uniform `agents/__init__.py` entrypoint (`agent.run(...)`) shared by UI/API/CLI/eval. Shared layers (`tools/`, `models/`, `guardrails/`, `memory/`, `observability/`, `knowledge/`) are framework-agnostic; only orchestration files inside `agents/` vary by adapter.
-- **Guardrails and tracing wire at the entrypoint** (`frameworks/_entrypoint.py`), so every framework gets identical ingress/egress behavior. Compliance is enforced by generated code, not TODO comments.
+- **Guardrails and tracing wire at the entrypoint** (`frameworks/_entrypoint.py`), so every framework gets identical ingress/egress behavior. API auth (`simple`/`multi_user`) wires into `api/routes.py` (auth router + `require_auth` on `/chat`), verified by generated tests. Compliance is enforced by generated code, not TODO comments.
 - **Testing:** pytest. Every adapter has structural generation tests (unit + validation) and a render → install → import → run-generated-tests smoke test (marked `slow`, run per-adapter in CI). The generated tests execute offline via the mock provider. Run tests before declaring done.
 - **Tooling:** uv for dependency management (`uv sync`, `uv run pytest`). Python 3.10+.
 - **Prompts are artifacts:** generated prompts live in versioned `prompts/` directories (project-level and per-agent-slice), never inline strings scattered in code.

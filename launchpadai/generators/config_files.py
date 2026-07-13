@@ -276,6 +276,7 @@ launchpad run
 | `launchpad run` | Start the agent with test UI |
 | `launchpad ingest` | Ingest documents into vector store |
 | `launchpad evaluate` | Run evaluation suite |
+| `pytest tests` | Run the generated tests (offline, mock LLM) |
 
 ---
 

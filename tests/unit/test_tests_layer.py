@@ -57,6 +57,17 @@ class TestMockProviderGeneration:
         assert "httpx" in dev
 
 
+class TestGeneratedDocs:
+    """The generated README must document the offline test workflow."""
+
+    def test_readme_documents_offline_tests(self, make_config, tmp_path):
+        config = make_config()
+        generate_config_files(config, tmp_path)
+        readme = (tmp_path / "README.md").read_text()
+        assert "requirements-dev.txt" in readme
+        assert "pytest tests" in readme
+
+
 class TestTestsLayerGeneration:
     @pytest.mark.parametrize("framework", FRAMEWORKS)
     def test_contract_tests_generated_for_every_framework(self, make_config, tmp_path, framework):
